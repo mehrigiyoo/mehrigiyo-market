@@ -10,6 +10,8 @@ services:
       - .:/Doctor
       - static_volume:/Doctor/staticfiles
       - media_volume:/Doctor/mediafiles
+      - ./config/doctor-ali-firebase-adminsdk-hujjz-7b33529111.json:/Doctor/config/doctor-ali-firebase-adminsdk-hujjz-7b33529111.json:ro
+
     ports:
       - "8021:8000"
     depends_on:
