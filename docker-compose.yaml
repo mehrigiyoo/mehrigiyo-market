@@ -20,7 +20,7 @@ services:
     restart: always
 
   doctor_db:
-    image: postgres:latest
+    image: postgres:15
     environment:
       POSTGRES_DB: doctor
       POSTGRES_USER: user_doctor
