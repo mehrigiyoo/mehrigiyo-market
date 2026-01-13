@@ -34,7 +34,7 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
 
 # Application definition
 SITE_ID = 1
@@ -167,7 +167,8 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [('127.0.0.1', 6379)],
+            "hosts": [("redis", 6379)]
+            # "hosts": [('127.0.0.1', 6379)],
         },
     },
 }
@@ -250,10 +251,14 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.0/howto/static-files/
 
 STATIC_URL = 'static/'
-STATIC_ROOT = 'static'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# STATIC_ROOT = 'static'
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = BASE_DIR / 'mediafiles'
+
+# MEDIA_ROOT = BASE_DIR / 'media'
 
 AUTH_USER_MODEL = "account.UserModel"
 # Default primary key field type
@@ -272,7 +277,10 @@ ESKIZ_SMS_PASSWORD = env('ESKIZ_SMS_PASSWORD')
 FIREBASE_REGISTRATION_KEYS = [env('ANDROID_REG_KEY'),  env('IOS_REG_KEY')]
 # FIREBASE_REGISTRATION_KEYS = ['1', '2']
 
-REDIS_HOST = '127.0.0.1'
+
+
+REDIS_HOST = 'redis'  # production
+# REDIS_HOST = '127.0.0.1'  localhost
 REDIS_PORT = '6379'
 CELERY_BROKER_URL = 'redis://' + REDIS_HOST + ':' + REDIS_PORT + '/0'
 CELERY_BROKER_TRANSPORT_OPTIONS = {'visibility_timeout': 3600}

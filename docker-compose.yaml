@@ -1,0 +1,69 @@
+version: '3'
+
+services:
+  web:
+    build: .
+    env_file:
+      - .env
+    command: sh -c "python manage.py migrate && python manage.py collectstatic --noinput && daphne -b 0.0.0.0 -p 8000 config.asgi:application"
+    volumes:
+      - .:/Doctor
+      - static_volume:/Doctor/staticfiles
+      - media_volume:/Doctor/mediafiles
+    ports:
+      - "8001:8000"
+    depends_on:
+      doctor_db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: always
+
+  doctor_db:
+    image: postgres:latest
+    environment:
+      POSTGRES_DB: doctor
+      POSTGRES_USER: user_doctor
+      POSTGRES_PASSWORD: password_doctor
+    ports:
+      - "5436:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U user_doctor -d doctor" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6372:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:
+  redis_data:
+
+
+
+
+
+
+
+
+
+
+#version: "3.3"
+#
+#
+#services:
+#  redis:
+#    image: redis
+#    ports:
+#      - "6379:6379"
