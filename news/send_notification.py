@@ -1,25 +1,36 @@
+# news/send_notification.py
+
 import os
+import tempfile
 import firebase_admin
 from firebase_admin import credentials, messaging
 
-firebase_secret_path = os.environ.get('FIREBASE_CRED_PATH')
+# Docker secrets bilan Firebase init
+firebase_secret_path = '/run/secrets/firebase_cred'
 
-if not firebase_admin._apps:
-    cred = credentials.Certificate(firebase_secret_path)
-    firebase_admin.initialize_app(cred)
+with open(firebase_secret_path) as f:
+    cred_json_content = f.read()
 
-def sendPush(title, description, registration_tokens, image=None, dataObject=None):
+with tempfile.NamedTemporaryFile(mode='w+', delete=False) as tmp_file:
+    tmp_file.write(cred_json_content)
+    tmp_file_path = tmp_file.name
+
+cred = credentials.Certificate(tmp_file_path)
+firebase_admin.initialize_app(cred)
+
+def sendPush(title, description, registration_tokens, image=None, notification_name=None, dataObject=None):
     message = messaging.MulticastMessage(
         notification=messaging.Notification(
             title=title,
             body=description,
             image=image,
         ),
-        data=dataObject or {},
+        data=dataObject,
         tokens=registration_tokens,
     )
     response = messaging.send_multicast(message)
     return response
+
 
 
 
