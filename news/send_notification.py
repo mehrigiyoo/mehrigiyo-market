@@ -2,19 +2,24 @@ import os
 import firebase_admin
 from firebase_admin import credentials, messaging
 
-# Firebase secret path from env (docker secrets)
+# Docker secrets yoki local fallback
 firebase_secret_path = os.environ.get(
-    'FIREBASE_CRED_PATH',
-    './config/doctor-ali-firebase-adminsdk-hujjz-7b33529111.json'
+    "FIREBASE_CRED_PATH",
+    "./config/doctor-ali-firebase-adminsdk-hujjz-7b33529111.json"
 )
 
-# Senior way: Certificate() o'zi faylni o'qiydi
-cred_path = os.environ.get("FIREBASE_CRED_PATH", "/run/secrets/firebase_cred")
-cred = credentials.Certificate(firebase_secret_path)
-firebase_admin.initialize_app(cred)
-
+# Init Firebase faqat 1 marta
+if not firebase_admin._apps:
+    cred = credentials.Certificate(firebase_secret_path)
+    firebase_admin.initialize_app(cred)
 
 def sendPush(title, description, registration_tokens, image=None, notification_name=None, dataObject=None):
+    """
+    Send Firebase push notification to multiple devices
+    """
+    if not registration_tokens:
+        return None
+
     message = messaging.MulticastMessage(
         notification=messaging.Notification(
             title=title,

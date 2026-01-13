@@ -19,7 +19,7 @@ services:
         condition: service_started
     restart: always
     environment:
-      - FIREBASE_CRED_PATH=/run/secrets/firebase_cred
+      - FIREBASE_CRED_PATH=/run/secrets/firebase_cred.json
     secrets:
       - firebase_cred
 
