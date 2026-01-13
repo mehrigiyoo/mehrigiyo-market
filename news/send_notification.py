@@ -9,6 +9,7 @@ firebase_secret_path = os.environ.get(
 )
 
 # Senior way: Certificate() o'zi faylni o'qiydi
+cred_path = os.environ.get("FIREBASE_CRED_PATH", "/run/secrets/firebase_cred")
 cred = credentials.Certificate(firebase_secret_path)
 firebase_admin.initialize_app(cred)
 
