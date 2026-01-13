@@ -1,24 +1,50 @@
+import os
 import firebase_admin
 from firebase_admin import credentials, messaging
 
-cred = credentials.Certificate("config/doctor-ali-firebase-adminsdk-hujjz-7b33529111.json")
-firebase_admin.initialize_app(cred)
+firebase_secret_path = os.environ.get('FIREBASE_CRED_PATH')
 
+if not firebase_admin._apps:
+    cred = credentials.Certificate(firebase_secret_path)
+    firebase_admin.initialize_app(cred)
 
-def sendPush(title, description, registration_tokens, image=None, notification_name=None, dataObject=None):
-    # See documentation on defining a message payload.
+def sendPush(title, description, registration_tokens, image=None, dataObject=None):
     message = messaging.MulticastMessage(
         notification=messaging.Notification(
             title=title,
             body=description,
             image=image,
         ),
-        data=dataObject,
+        data=dataObject or {},
         tokens=registration_tokens,
     )
-
-    # Send a message to the device corresponding to the provided
-    # registration token.
     response = messaging.send_multicast(message)
-    # Response is a message ID string.
     return response
+
+
+
+
+# import firebase_admin
+# from firebase_admin import credentials, messaging
+#
+# cred = credentials.Certificate("config/doctor-ali-firebase-adminsdk-hujjz-7b33529111.json")
+# firebase_admin.initialize_app(cred)
+#
+#
+# def sendPush(title, description, registration_tokens, image=None, notification_name=None, dataObject=None):
+#     # See documentation on defining a message payload.
+#     message = messaging.MulticastMessage(
+#         notification=messaging.Notification(
+#             title=title,
+#             body=description,
+#             image=image,
+#         ),
+#         data=dataObject,
+#         tokens=registration_tokens,
+#     )
+#
+#     # Send a message to the device corresponding to the provided
+#     # registration token.
+#     response = messaging.send_multicast(message)
+#     # Response is a message ID string.
+#     return response
