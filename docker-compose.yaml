@@ -5,7 +5,10 @@ services:
     build: .
     env_file:
       - .env
-    command: sh -c "python manage.py migrate && python manage.py collectstatic --noinput && daphne -b 0.0.0.0 -p 8000 config.asgi:application"
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             daphne -b 0.0.0.0 -p 8000 config.asgi:application"
     volumes:
       - .:/Doctor
       - static_volume:/Doctor/staticfiles
@@ -19,7 +22,8 @@ services:
         condition: service_started
     restart: always
     environment:
-      - FIREBASE_CRED_PATH=/run/secrets/firebase_cred.json
+      # Secretni to'g'ri ko'rsatish
+      FIREBASE_CRED_PATH: /run/secrets/firebase_cred
     secrets:
       - firebase_cred
 
@@ -57,6 +61,7 @@ volumes:
   static_volume:
   media_volume:
   redis_data:
+
 
 
 
