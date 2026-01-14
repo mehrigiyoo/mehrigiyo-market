@@ -282,6 +282,7 @@ class EventsConsumer(WebsocketConsumer):
 
 class VideoChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
+        print("VIDEOCHAT CONNECTED", self.scope["path"])
         print("PATH:", self.scope["path"])
         self.room_name = self.scope['url_route']['kwargs']['room_id']
         self.room_group_name = 'video_%s' % self.room_name
