@@ -22,22 +22,65 @@ def getReceiver(receiver_id):
     return user
 
 
-def getMessage(chat_id, user, msg):
-    try:
-        f = FileMessage.objects.get(id=msg['file_message'])
-        del msg['file_message']
-    except:
-        f = None
-    message = Message(**msg)
-    message.owner = user
-    message.file_message = f
-    message.save()
-    room = ChatRoom.objects.get(id=chat_id)
-    room.messages.add(message)
-    room.save()
-    serializer = MessageSerializer(message)
 
+def getMessage(chat_id, user, msg):
+    """
+    msg string yoki dict bo'lishi mumkin (file_message bilan ham ishlaydi)
+    """
+    file_obj = None
+
+    # file_message borligini tekshirish
+    if isinstance(msg, dict) and msg.get('file_message'):
+        try:
+            file_obj = FileMessage.objects.get(id=msg['file_message'])
+            del msg['file_message']
+        except FileMessage.DoesNotExist:
+            file_obj = None
+
+    # Agar msg string bo'lsa, uni dict ga aylantiramiz
+    if isinstance(msg, str):
+        msg_data = {"message": msg}  # default maydon nomi `message` ekan
+    elif isinstance(msg, dict):
+        msg_data = msg
+    else:
+        raise ValueError("msg faqat string yoki dict bo'lishi mumkin")
+
+    # Message yaratish
+    message = Message.objects.create(
+        owner=user,
+        file_message=file_obj,
+        **msg_data
+    )
+
+    # ChatRoom ga qo'shish
+    try:
+        room = ChatRoom.objects.get(id=chat_id)
+        room.messages.add(message)
+        room.save()
+    except ChatRoom.DoesNotExist:
+        print(f"ChatRoom {chat_id} mavjud emas")
+
+    # Serializer orqali JSON qaytarish
+    serializer = MessageSerializer(message)
     return serializer.data
+
+
+# def getMessage(chat_id, user, msg):
+#     try:
+#         f = FileMessage.objects.get(id=msg['file_message'])
+#         del msg['file_message']
+#     except:
+#         f = None
+#     message = Message(**msg)
+#     message.owner = user
+#     message.file_message = f
+#     message.save()
+#     room = ChatRoom.objects.get(id=chat_id)
+#     room.messages.add(message)
+#     room.save()
+#     serializer = MessageSerializer(message)
+#
+#     return serializer.data
 
 
 def sendToTelegram(chat_id, room_id, __dict: ReturnDict):
@@ -128,15 +171,45 @@ class ChatConsumer(WebsocketConsumer):
         )
 
     def receive(self, text_data):
-        text_data_json = json.loads(text_data)
-        chat_id = text_data_json['chat_id']
-        msg = text_data_json['message']
-        current_user = self.scope["user"]
+        try:
+            text_data_json = json.loads(text_data)
+        except json.JSONDecodeError:
+            self.send(text_data=json.dumps({
+                "status": "error",
+                "error": "Invalid JSON"
+            }))
+            return
+
+        chat_id = text_data_json.get('chat_id')
+        msg = text_data_json.get('message')
+        current_user = self.scope.get("user")
+
+        if not chat_id or not msg:
+            self.send(text_data=json.dumps({
+                "status": "error",
+                "error": "chat_id va message maydoni kerak"
+            }))
+            return
+
         print(current_user, '==========')
 
-        data = getMessage(chat_id, current_user, msg)
-        sendToTelegram(chat_id, self.scope['url_route']['kwargs']['room_id'], data)
+        # getMessage funksiyasini chaqiramiz
+        try:
+            data = getMessage(chat_id, current_user, msg)
+        except Exception as e:
+            self.send(text_data=json.dumps({
+                "status": "error",
+                "error": str(e)
+            }))
+            return
 
+        # Telegramga yuborish (agar kerak bo‘lsa)
+        try:
+            sendToTelegram(chat_id, self.scope['url_route']['kwargs']['room_id'], data)
+        except Exception as e:
+            print(f"Telegram send failed: {e}")
+
+        # Room ga broadcast
         async_to_sync(self.channel_layer.group_send)(
             self.room_group_name,
             {
