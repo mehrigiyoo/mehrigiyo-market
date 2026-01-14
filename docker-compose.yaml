@@ -11,8 +11,8 @@ services:
              daphne -b 0.0.0.0 -p 8000 config.asgi:application"
     volumes:
       - .:/Doctor
-      - static_volume:/Doctor/staticfiles
-      - media_volume:/Doctor/mediafiles
+      - ./staticfiles:/Doctor/staticfiles   # hostdagi folderni bog‘laymiz
+      - ./mediafiles:/Doctor/mediafiles
     ports:
       - "8021:8000"
     depends_on:
@@ -58,8 +58,8 @@ secrets:
 
 volumes:
   postgres_data:
-  static_volume:
-  media_volume:
+  staticfiles:   # host bilan bog‘lanadi
+  mediafiles:
   redis_data:
 
 
