@@ -1,7 +1,7 @@
 from admin_auto_filters.filters import AutocompleteFilter
 
 from django.contrib import admin
-from .models import UserModel, CountyModel, RegionModel, DeliveryAddress, OfferModel, Referrals
+from .models import UserModel, CountyModel, RegionModel, DeliveryAddress, OfferModel, Referrals, SmsCode
 from modeltranslation.admin import TabbedTranslationAdmin
 from django.contrib.auth.admin import UserAdmin
 
@@ -77,6 +77,38 @@ class OfferModelAdmin(admin.ModelAdmin):
 
 class ReferralModelAdmin(admin.ModelAdmin):
     list_display = ['id', 'user', 'invited_user']
+
+@admin.register(SmsCode)
+class SmsCodeAdmin(admin.ModelAdmin):
+    list_display = (
+        'phone',
+        'code',
+        'ip',
+        'confirmed',
+        'expire_at',
+    )
+
+    list_filter = (
+        'confirmed',
+        'expire_at',
+    )
+
+    search_fields = (
+        'phone',
+        'code',
+        'ip',
+    )
+
+    readonly_fields = (
+        'phone',
+        'code',
+        'ip',
+        'expire_at',
+    )
+
+    ordering = ('-expire_at',)
+
+    list_per_page = 25
 
 
 admin.site.register(UserModel, CustomUserAdmin)
