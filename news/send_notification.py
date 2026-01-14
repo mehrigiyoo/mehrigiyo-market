@@ -2,30 +2,40 @@ import os
 import firebase_admin
 from firebase_admin import credentials, messaging
 
-firebase_secret_path = os.environ.get(
-    'FIREBASE_CRED_PATH',
-    './config/doctor-ali-firebase-adminsdk-hujjz-7b33529111.json'
-)
 
-# Container ichida faqat faylni o'qiydi, directory emas
-if os.path.isdir(firebase_secret_path):
-    # Secret noto'g'ri mount qilingan
-    raise ValueError(f"Firebase secret path is a directory, expected a file: {firebase_secret_path}")
+def get_firebase_app():
+    if firebase_admin._apps:
+        return firebase_admin.get_app()
 
-if not firebase_admin._apps:
-    cred = credentials.Certificate(firebase_secret_path)
-    firebase_admin.initialize_app(cred)
+    cred_path = os.getenv("FIREBASE_CRED_PATH")
+
+    if not cred_path:
+        raise RuntimeError("FIREBASE_CRED_PATH is not set")
+
+    if not os.path.isfile(cred_path):
+        raise RuntimeError(f"Firebase credential file not found: {cred_path}")
+
+    cred = credentials.Certificate(cred_path)
+    return firebase_admin.initialize_app(cred)
+
 
 def sendPush(title, description, registration_tokens, image=None, dataObject=None):
     if not registration_tokens:
         return None
+
+    get_firebase_app()
+
     message = messaging.MulticastMessage(
-        notification=messaging.Notification(title=title, body=description, image=image),
+        notification=messaging.Notification(
+            title=title,
+            body=description,
+            image=image,
+        ),
         data=dataObject or {},
         tokens=registration_tokens,
     )
-    response = messaging.send_multicast(message)
-    return response
+
+    return messaging.send_multicast(message)
 
 
 

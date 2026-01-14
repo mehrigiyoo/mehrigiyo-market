@@ -22,10 +22,10 @@ services:
         condition: service_started
     restart: always
     environment:
-      # Secretni to'g'ri ko'rsatish
-      FIREBASE_CRED_PATH: /run/secrets/firebase_cred
+      FIREBASE_CRED_PATH: /run/secrets/firebase_cred.json
     secrets:
-      - firebase_cred
+      - source: firebase_cred
+        target: firebase_cred.json
 
   doctor_db:
     image: postgres:15
