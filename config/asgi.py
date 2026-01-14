@@ -18,8 +18,9 @@ django.setup()
 
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
-import chat.routing
 from chat.chatmiddleware import TokenAuthMiddleware
+from chat.routing import websocket_urlpatterns
+
 
 
 application = ProtocolTypeRouter({
@@ -27,13 +28,11 @@ application = ProtocolTypeRouter({
     "websocket": TokenAuthMiddleware(
         AuthMiddlewareStack(
             URLRouter([
-                # 👇 MANA SHU ENG MUHIM JOY
-                re_path(r"^ws/", URLRouter(chat.websocket_urlpatterns)),
+                re_path(r"^ws/", URLRouter(websocket_urlpatterns)),
             ])
         )
     ),
 })
-
 
 # application = ProtocolTypeRouter(
 #     {
