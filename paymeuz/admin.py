@@ -1,7 +1,7 @@
 from admin_auto_filters.filters import AutocompleteFilter
 
 from django.contrib import admin
-from .models import PaymeTransactionModel, Card
+from paymeuz.models import PaymeTransactionModel, Card
 
 
 class OwnerFilter(AutocompleteFilter):
