@@ -1,150 +1,103 @@
-import uuid
-from django.db.models import Sum, Avg, Count
-from django.shortcuts import render
+import datetime
+import pytz
+from django.db.models import Count
+from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import viewsets, status
-from rest_framework.decorators import action, api_view
-from rest_framework.pagination import LimitOffsetPagination
+from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
 from rest_framework.views import APIView
 from rest_framework import generics
 
-import datetime
-import pytz
-
-from account.models import UserModel
-from chat.models import ChatRoom
+from account.models import SmsCode
 from config.responses import ResponseSuccess, ResponseFail
-from specialist.methods import notify_doctors
-from .serializers import TypeDoctorSerializer, DoctorSerializer, RateSerializer, AdvertisingSerializer, \
-    AdviceSerializer, AdvicecDocSerializer, GenderStatisticsSerializer
-from .models import Doctor, TypeDoctor, AdviceTime, Advertising
-from .filters import DoctorFilter
+from .permissions import IsDoctor
+from .serializers import TypeDoctorSerializer, RateSerializer, AdvertisingSerializer, \
+    GenderStatisticsSerializer, AdviceTimeSerializer, AvailableSlotSerializer, \
+    DoctorUnavailableSerializer, WorkScheduleSerializer, DoctorProfileSerializer, \
+    DoctorRegisterSerializer
+from .models import Doctor, TypeDoctor, Advertising, AdviceTime, DoctorUnavailable, WorkSchedule
+from .services import create_advice_service
+from django.contrib.auth import get_user_model
+UserModel = get_user_model()
 
 utc = pytz.UTC
 
 
 class AdvertisingView(generics.ListAPIView):
-    queryset = Advertising.objects.all()
-    # permission_classes = (IsAuthenticated,)
     serializer_class = AdvertisingSerializer
     pagination_class = api_settings.DEFAULT_PAGINATION_CLASS
 
-    @swagger_auto_schema(
-        operation_id='advertising',
-        operation_description="advertisingView",
-        # request_body=AdvertisingSerializer(),
-        responses={
-            '200': AdvertisingSerializer()
-        },
-    )
-    def get(self, request, *args, **kwargs):
-
-        return self.list(request, *args, **kwargs)
+    def get_queryset(self):
+        return Advertising.objects.select_related('doctor')
 
 
 class TypeDoctorView(generics.ListAPIView):
     queryset = TypeDoctor.objects.all()
-    # permission_classes = (IsAuthenticated,)
     serializer_class = TypeDoctorSerializer
 
-    @swagger_auto_schema(
-        operation_id='get_doctor_types',
-        operation_description="get_doctor_types",
-        # request_body=TypeDoctorSerializer(),
-        responses={
-            '200': TypeDoctorSerializer()
-        },
-
-    )
-    def get(self, request, *args, **kwargs):
-        return self.list(request, *args, **kwargs)
 
 
-class DoctorsView(generics.ListAPIView):
-    queryset = Doctor.objects.all()
-    # permission_classes = (IsAuthenticated,)
-    serializer_class = DoctorSerializer
-    filterset_class = DoctorFilter
+class DoctorProfileView(RetrieveUpdateAPIView):
+    serializer_class = DoctorProfileSerializer
+    permission_classes = [IsAuthenticated, IsDoctor]
 
-    @swagger_auto_schema(
-        operation_id='get_doctors',
-        operation_description="get_doctors",
-        # request_body=DoctorSerializer(),
-        responses={
-            '200': DoctorSerializer()
-        },
-        manual_parameters=[
-            openapi.Parameter('type_ides', openapi.IN_QUERY, description="test manual param", type=openapi.TYPE_STRING)
-        ]
-    )
-    def get(self, request, *args, **kwargs):
-        key = request.GET.get('type_ides', False)
-        queryset = self.queryset.annotate(
-            total_rate=Avg('comments_doc__rate')
-        ).order_by('-total_rate')
-        filtered_qs = self.filterset_class(request.GET, queryset=queryset).qs
-        for i in filtered_qs:
-            i.review = i.review + 1
-            i.save()
-        self.queryset = filtered_qs
-        if key:
-            keys = key.split(',')
-            self.queryset = self.queryset.filter(type_doctor_id__in=keys)
-        return self.list(request, *args, **kwargs)
-
-    def get_serializer_context(self):
-        context = super(DoctorsView, self).get_serializer_context()
-        context.update({'user': self.request.user})
-        return context
+    def get_object(self):
+        doctor, created = Doctor.objects.get_or_create(
+            user=self.request.user,
+            defaults={
+                "full_name": "",
+                "experience": "",
+                "gender": "male",
+                "type_doctor_id": 1,
+            }
+        )
+        return doctor
 
 
-class DoctorRetrieveView(generics.RetrieveAPIView):
-    queryset = Doctor.objects.all()
-    serializer_class = DoctorSerializer
 
-    @swagger_auto_schema(
-        operation_id='doctor-detail',
-        operation_description="retrieving the doctor",
-        responses={
-            '200': DoctorSerializer()
-        },
-    )
-    def get(self, request, *args, **kwargs):
-        return self.retrieve(request, *args, **kwargs)
+class DoctorRegisterView(APIView):
+    def post(self, request):
+        serializer = DoctorRegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
+        phone = serializer.validated_data['phone']
 
-class GetDoctorsWithType(generics.ListAPIView):
-    queryset = Doctor.objects.all()
-    # permission_classes = (IsAuthenticated,)
-    serializer_class = DoctorSerializer
-    pagination_class = api_settings.DEFAULT_PAGINATION_CLASS
+        # SMS tasdiqlanganmi?
+        sms_qs = SmsCode.objects.filter(
+            phone=phone,
+            confirmed=True,
+            expire_at__gte=timezone.now()
+        )
 
-    @swagger_auto_schema(
-        # request_body=DoctorSerializer(),
-        manual_parameters=[
-        openapi.Parameter('type_ides', openapi.IN_QUERY, description="test manual param", type=openapi.TYPE_STRING)
-    ], operation_description='GET /articles/today/')
-    @action(detail=False, methods=['get'])
-    def get(self, request, *args, **kwargs):
-        key = request.GET.get('type_ides', False)
-        print('rabotaet')
-        if key:
-            print('rabotaet')
-            keys = key.split(',')
-            print(keys, '---------------')
-            self.queryset = self.queryset.filter(type_doctor_id__in=keys)
-            print('333333333333')
-        return self.list(request, *args, **kwargs)
+        if not sms_qs.exists():
+            return Response(
+                {"detail": "SMS tasdiqlanmagan yoki muddati o'tgan"},
+                status=400
+            )
 
+        # SMS code qayta ishlatilmasin
+        sms_qs.update(confirmed=False)
+
+        serializer.save()
+
+        return Response(
+            {
+                "detail": (
+                    "Ro‘yxatdan o‘tdingiz. "
+                    "Profilingiz admin tomonidan tasdiqlangach login qilishingiz mumkin."
+                )
+            },
+            status=201
+        )
 
 class GetSingleDoctor(viewsets.ModelViewSet):
     queryset = Doctor.objects.all()
     # permission_classes = (IsAuthenticated,)
-    serializer_class = DoctorSerializer
+    serializer_class = DoctorProfileSerializer
 
     @swagger_auto_schema(manual_parameters=[
         openapi.Parameter('pk', openapi.IN_QUERY, description="test manual param", type=openapi.TYPE_NUMBER)
@@ -165,148 +118,116 @@ class GetSingleDoctor(viewsets.ModelViewSet):
         return ResponseSuccess(data=serializer.data, request=request.method)
 
 
-class RateView(APIView):
-    permission_classes = (IsAuthenticated,)
-
-    def post(self, request):
-        serializer = RateSerializer(data=request.data,
-                                    context={'request': request},
-                                    required=False)
-
-        if serializer.is_valid():
-            serializer.save()
-            return ResponseSuccess(data=serializer.data)
-        else:
-            return ResponseFail(data=serializer.errors)
+class RateView(generics.CreateAPIView):
+    serializer_class = RateSerializer
+    permission_classes = [IsAuthenticated]
 
 
-class AdviceView(APIView):
-    permission_classes = (IsAuthenticated,)
 
-    @swagger_auto_schema(
-        operation_id='get_advice_times',
-        operation_description="get_advice_times",
-        # request_body=DoctorSerializer(),
-        responses={
-            '200': AdviceSerializer()
-        },
-        manual_parameters=[
-            openapi.Parameter('day', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
-            openapi.Parameter('month', openapi.IN_QUERY,  type=openapi.TYPE_INTEGER),
-            openapi.Parameter('year', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
+class WorkScheduleViewSet(viewsets.ModelViewSet):
+    """
+    Admin yoki Doctor o'z ish jadvalini boshqaradi
+    """
+    queryset = WorkSchedule.objects.all()
+    serializer_class = WorkScheduleSerializer
+    permission_classes = [IsAuthenticated]
 
-            openapi.Parameter('my', openapi.IN_QUERY, description="all clients time", type=openapi.TYPE_BOOLEAN),
-            openapi.Parameter('id', openapi.IN_QUERY, type=openapi.TYPE_INTEGER)
-        ]
-    )
+    def get_queryset(self):
+        user = self.request.user
+        if hasattr(user, 'doctor_profile'):
+            return WorkSchedule.objects.filter(doctor=user.doctor_profile)
+        return WorkSchedule.objects.all()
+
+
+class DoctorUnavailableViewSet(viewsets.ModelViewSet):
+    """
+    Admin yoki Doctor ishlay olmaydigan kunlarini boshqaradi
+    """
+    queryset = DoctorUnavailable.objects.all()
+    serializer_class = DoctorUnavailableSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if hasattr(user, 'doctor_profile'):
+            return DoctorUnavailable.objects.filter(doctor=user.doctor_profile)
+        return DoctorUnavailable.objects.all()
+
+
+class AvailableSlotsView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
-        day = request.GET.get('day', False)
-        month = request.GET.get('month', False)
-        year = request.GET.get('year', False)
-        my = request.GET.get('my', False)
-        pk = request.GET.get('id', False)
-        if day:
-            if my:
-                advice = AdviceTime.objects.filter(doctor_id=pk,
-                                                client=request.user,
-                                                start_time__day=day,
-                                                start_time__month=month,
-                                                start_time__year=year)
-            else:
-                advice = AdviceTime.objects.filter(doctor_id=pk,
-                                                start_time__day=day,
-                                                start_time__month=month,
-                                                start_time__year=year)
-        else:
-            if my:
-                if pk:
-                    advice = AdviceTime.objects.filter(doctor_id=pk,
-                                                client=request.user, start_time__gte=datetime.datetime.now())
-                else:
-                    advice = AdviceTime.objects.filter(client=request.user, start_time__gte=datetime.datetime.now())
-            else:
-                advice = AdviceTime.objects.filter(doctor_id=pk, start_time__gte=datetime.datetime.now())
+        """
+        Mobile clientga berish uchun bo‘sh vaqtlar
+        Params: doctor_id, date (YYYY-MM-DD)
+        """
+        doctor_id = request.GET.get('doctor_id')
+        date_str = request.GET.get('date')
+        if not doctor_id or not date_str:
+            return Response({"error": "doctor_id va date kerak"}, status=status.HTTP_400_BAD_REQUEST)
 
-        ser = AdviceSerializer(advice, many=True)
-        return ResponseSuccess(data=ser.data)
+        doctor = Doctor.objects.get(id=doctor_id)
+        date = datetime.strptime(date_str, "%Y-%m-%d").date()
+
+        # Doctor ishlay olmaydigan kunlar
+        if DoctorUnavailable.objects.filter(doctor=doctor, date=date).exists():
+            return Response([])  # Hech qanday slot yo'q
+
+        # Doctor ish jadvali
+        weekday = date.weekday()
+        schedules = WorkSchedule.objects.filter(doctor=doctor, weekday=weekday)
+        available_slots = []
+
+        for sched in schedules:
+            start_dt = datetime.combine(date, sched.start_time)
+            end_dt = datetime.combine(date, sched.end_time)
+
+            # Har bir slotni 30 daqiqalik intervallarda bo‘lamiz
+            slot_start = start_dt
+            while slot_start + datetime.timedelta(minutes=30) <= end_dt:
+                slot_end = slot_start + datetime.timedelta(minutes=30)
+                # Band bo‘lmagan slot
+                if not AdviceTime.objects.filter(
+                    doctor=doctor,
+                    start_time__lt=slot_end,
+                    end_time__gt=slot_start
+                ).exists():
+                    available_slots.append({
+                        "start_time": slot_start,
+                        "end_time": slot_end
+                    })
+                slot_start += datetime.timedelta(minutes=30)
+
+        serializer = AvailableSlotSerializer(available_slots, many=True)
+        return Response(serializer.data)
 
 
-    @swagger_auto_schema(
-        operation_id='post_advice_times',
-        operation_description="post_advice_times",
-        request_body=AdvicecDocSerializer(),
-        responses={
-            '200': AdviceSerializer()
-        },
-        # manual_parameters=[
-        #     openapi.Parameter('day', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
-        #     openapi.Parameter('month', openapi.IN_QUERY,  type=openapi.TYPE_INTEGER),
-        #     openapi.Parameter('year', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
+class BookAdviceView(APIView):
+    permission_classes = [IsAuthenticated]
 
-        #     openapi.Parameter('my', openapi.IN_QUERY, description="all clients time", type=openapi.TYPE_BOOLEAN)
-        # ]
-    )
     def post(self, request):
-        date_time_start = request.data['start_time']
-        date_time_end = request.data['end_time']
-        pk = request.data['id']
-
-        date_time_start_obj = date_time_start
-        #  datetime.datetime.strptime(date_time_start, '%d/%m/%y %H:%M:%S')
-        date_time_end_obj = date_time_end
-        # datetime.datetime.strptime(date_time_end, '%d/%m/%y %H:%M:%S')
-
-        advice = None
-        try:
-            advice = AdviceTime.objects.get(start_time=date_time_start_obj, end_time=date_time_end_obj)
-        except:
-            pass
-
-        if advice is not None:
-            return ResponseFail(data="Doktor bu vaqt oralig'ida band!")
-
-        advice = AdviceTime()
-        advice.client = request.user
-        advice.doctor = Doctor.objects.get(id=pk)
-        advice.start_time = date_time_start_obj
-        advice.end_time = date_time_end_obj
-        advice.save()
-
-        # Send notifier message to Telegram
-        TIME_FORMAT = "%d/%m/%Y %H:%M"
-
-        start_time = datetime.datetime.fromisoformat(date_time_start_obj.replace('Z', '+05:00')).__add__(datetime.timedelta(hours=5)).strftime(TIME_FORMAT)
-        end_time = datetime.datetime.fromisoformat(date_time_end_obj.replace('Z', '+05:00')).__add__(datetime.timedelta(hours=5)).strftime(TIME_FORMAT)
-
-        notify_doctors(advice.id, start_time=start_time, end_time=end_time)
-
-        # Create chat room after creating advice
+        """
+        Client slotni bron qiladi
+        Params: doctor_id, start_time, end_time
+        """
+        client = request.user
+        doctor_id = request.data.get("doctor_id")
+        start_time = request.data.get("start_time")
+        end_time = request.data.get("end_time")
 
         try:
-            doctor = Doctor.objects.get(id=pk)
-        except:
-            return ResponseFail(data='Doctor not Found')
+            advice = create_advice_service(
+                client=client,
+                doctor_id=doctor_id,
+                start_time=start_time,
+                end_time=end_time
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            doctor_user = UserModel.objects.get(specialist_doctor=doctor, is_staff=True)
-        except:
-            return ResponseFail(data='Doctor not Found')
-
-        try:
-            chatroom = ChatRoom.objects.get(client=request.user, doktor=doctor_user)
-        except:
-            chatroom = None
-
-        if chatroom is None:
-            chatroom = ChatRoom()
-            chatroom.client = request.user
-            chatroom.doktor = doctor_user
-            chatroom.token = uuid.uuid4()
-            chatroom.save()
-
-        return ResponseSuccess()
-
-
+        serializer = AdviceTimeSerializer(advice)
+        return Response(serializer.data)
 
 #Doctor gender statistic
 

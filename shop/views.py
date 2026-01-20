@@ -1,14 +1,11 @@
 from django.conf import settings
 from django.db.models import Avg, Count, Q
-from django.shortcuts import render
 from drf_yasg import openapi
 from google.cloud.firestore_v1.order import Order
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.settings import api_settings
 from rest_framework.views import APIView
-
 from paymeuz.methods import send_order
 from paymeuz.models import Card
 from .filters import ProductFilter
@@ -18,14 +15,11 @@ from .serializers import (TypeMedicineSerializer, MedicineSerializer, CartSerial
                           OrderShowSerializer, ListSerializer, CartPostSerializer,
                           OrderPutSerializer, CartPutSerializer, PutSerializer, OrderStatusSerializer,
                           MedicineTypeSerializer)
-from .models import PicturesMedicine, TypeMedicine, Medicine, CartModel, OrderModel
+from .models import TypeMedicine, Medicine, CartModel, OrderModel
 from rest_framework import viewsets, generics
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework.mixins import ListModelMixin
-from rest_framework.viewsets import GenericViewSet
-
 from specialist.models import Doctor, AdviceTime
-from specialist.serializers import DoctorSerializer
+from specialist.serializers import DoctorProfileSerializer
 from news.models import NewsModel
 from news.serializers import NewsModelSerializer
 
@@ -389,7 +383,7 @@ class SearchView(APIView):
                 doc = []
                 doc.extend(Doctor.objects.filter(full_name__contains=key))
                 doc.extend(Doctor.objects.filter(type_doctor__name__contains=key))
-                doc_ser = DoctorSerializer(doc, many=True)
+                doc_ser = DoctorProfileSerializer(doc, many=True)
                 data['doctors'] = doc_ser.data
             if news:
                 new = []
@@ -455,3 +449,4 @@ class MedicineByTypeView(APIView):
         medicines = Medicine.objects.filter(type_medicine=type_medicine)
         serializer = MedicineTypeSerializer(medicines, many=True)
         return Response(serializer.data)
+

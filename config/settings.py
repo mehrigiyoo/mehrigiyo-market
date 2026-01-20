@@ -67,7 +67,9 @@ INSTALLED_APPS = [
     'news',
     'comment',
     'chat',
-    'api'
+    'api',
+    'client',
+    'support'
 ]
 
 

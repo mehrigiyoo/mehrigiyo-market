@@ -1,13 +1,7 @@
-from django.db import models
 import datetime
-
-from account.models import UserModel
+from django.db import models
 from specialist.models import Doctor
 from shop.models import Medicine
-from .tasks import send_notification_func
-from django.utils import timezone
-
-# from django.utils.translation import gettext as _
 
 today = datetime.date.today()
 
@@ -89,33 +83,4 @@ class Notification(models.Model):
         (1, 'medicines'),
         (2, 'doctors')
     ), default=1, db_index=True)
-
-    # def save(self, *args, **kwargs):
-    #     # Obyektni saqlash
-    #     super(Notification, self).save(*args, **kwargs)
-
-    #     # Bildirishnoma yuborish vazifasini qo'shish
-    #     image_path = None
-    #     if self.image:
-    #         image_path = self.image.path
-    #     send_notification_func.s(
-    #         self.title,
-    #         self.description,
-    #         image_path,
-    #         self.type,
-    #         self.foreign_id
-    #     ).apply_async(eta=self.push_time + datetime.timedelta(seconds=30))
-
-    #     print("LLLLLLLLLLLLLLLLLLLLLLLLLLLLAAAAAAAAA")
-
-    # def save(self, *args, **kwargs):
-    #
-    #     image_path = None
-    #     if self.image:
-    #         image_path = self.image.path
-    #     send_notification_func.s(self.title, self.description, image_path, self.type, self.foreign_id).apply_async(
-    #         eta=self.push_time + datetime.timedelta(seconds=30))
-    #     print("LLLLLLLLLLLLLLLLLLLLLLLLLLLLAAAAAAAAA")
-    #     super(Notification, self).save(*args, **kwargs)
-
 

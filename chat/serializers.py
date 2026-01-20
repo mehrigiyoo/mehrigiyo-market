@@ -1,11 +1,9 @@
-from random import random
 from rest_framework import serializers
 
 from chat.keywords import APP_CERTIFICATE, APP_ID
 from .models import ChatRoom, Message, FileMessage
 from account.models import UserModel
 from specialist.models import AdviceTime
-from specialist.serializers import AdviceSerializer
 from vendor.AgoraDynamicKey import RtcTokenBuilder2
 
 import datetime
@@ -128,14 +126,17 @@ class RoomsSerializer(serializers.ModelSerializer):
         return {}
 
     def get_advice(self, obj):
-        ad = AdviceTime.objects.filter(doctor=obj.doktor.specialist_doctor,
-                                       client=obj.client,
-                                       start_time__gte=datetime.datetime.now()).first()
-        if ad != None:
-            ser = AdviceSerializer(ad)
-            return ser.data
-        else:
-            return None
+        ad = AdviceTime.objects.filter(
+            doctor=obj.doktor.specialist_doctor,
+            client=obj.client,
+            start_time__gte=datetime.datetime.now()
+        ).only('start_time', 'end_time').first()
+        if ad:
+            return {
+                "start_time": ad.start_time,
+                "end_time": ad.end_time
+            }
+        return None
 
     def get_doctor(self, obj):
         try:

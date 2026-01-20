@@ -1,109 +1,147 @@
-import json
-from django.db.models import Sum
 from rest_framework import serializers
 
 from account.models import UserModel
-from .models import Doctor, TypeDoctor, RateDoctor, Advertising, AdviceTime
-from comment.models import CommentDoctor
+from config.validators import PhoneValidator
+from .models import Doctor, TypeDoctor, RateDoctor, Advertising, AdviceTime, WorkSchedule, DoctorUnavailable, \
+    DoctorVerification
 
 
 class AdvertisingSerializer(serializers.ModelSerializer):
-    user_id = serializers.SerializerMethodField(method_name='get_user_id')
-
-    def get_user_id(self, instance):
-        doctor_instance = instance.doctor
-        try:
-            user_model = UserModel.objects.get(specialist_doctor=doctor_instance, is_staff=True)
-        except:
-            return -1
-
-        return user_model.id
-
     class Meta:
         model = Advertising
-        fields = ['id', 'user_id', 'image', 'title', 'text']
-
-class DoctorUserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserModel
-        fields = ['id', 'username', 'email', 'avatar', 'first_name', 'last_name']
+        fields = ['id', 'image', 'title', 'text', 'doctor']
 
 class TypeDoctorSerializer(serializers.ModelSerializer):
-    # get_doctors_count = serializers.SerializerMethodField('')
+    doctors_count = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = TypeDoctor
-        fields = ['id', 'name', 'name_uz', 'name_ru', 'name_en', 'image', 'get_doctors_count']
+        fields = ['id', 'name', 'name_uz', 'name_ru', 'name_en', 'image', 'doctors_count']
 
-class DoctorSerializer(serializers.ModelSerializer):
-    user = serializers.ReadOnlyField()
-    type_doctor = TypeDoctorSerializer()
-    rate = serializers.CharField(read_only=True, )
-    is_favorite = serializers.BooleanField(read_only=True, )
-    top = serializers.BooleanField(read_only=True, )
 
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-
-        try:
-            usermodel = UserModel.objects.get(specialist_doctor=instance)
-            representation['user'] = DoctorUserSerializer(usermodel).data
-        except Exception as error:
-            print(error)
-            pass
-
-        try:
-            user = self.context['user']
-            if instance in user.favorite_medicine.all():
-                representation['is_favorite'] = True
-            else:
-                representation['is_favorite'] = False
-        except:
-            pass
-        # doctors = CommentDoctor.objects.filter(doctor=representation,)
-        # representation['rate'] = sum(instance.comments_doc.values('rate', flat=True))
-        try:
-            representation['rate'] = instance.total_rate or 0
-
-            if representation['rate'] >= 4.5 and representation['review'] >= 15:
-                representation['top'] = True
-            else:
-                representation['top'] = False
-        except:
-            pass
-        # representation['rate'] = Sum(instance__comments_doc__rate)
-        return representation
-
+class DoctorProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Doctor
-        fields = '__all__'
-        extra_fields = ['user', 'rate', 'is_favorite']
+        fields = (
+            'id',
+            'image',
+            'full_name',
+            'experience',
+            'description',
+            'type_doctor',
+            'birthday',
+            'gender',
+        )
+
+
+
+class DoctorRegisterSerializer(serializers.Serializer):
+    phone = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+    password2 = serializers.CharField(write_only=True)
+
+    full_name = serializers.CharField()
+    gender = serializers.ChoiceField(choices=[('male', 'Male'), ('female', 'Female')])
+    birthday = serializers.DateField(required=False)
+    experience = serializers.CharField()
+    description = serializers.CharField(required=False, allow_blank=True)
+    type_doctor = serializers.IntegerField()
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password2']:
+            raise serializers.ValidationError("Parollar mos emas")
+
+        phone = normalize_phone(attrs['phone'])
+        if UserModel.objects.filter(phone=phone).exists():
+            raise serializers.ValidationError("Bu telefon raqam allaqachon ro‘yxatdan o‘tgan")
+
+        attrs['phone'] = phone
+        return attrs
+
+    def create(self, validated_data):
+        password = validated_data.pop('password')
+        validated_data.pop('password2')
+
+        phone = validated_data.pop('phone')
+
+        # User yaratamiz
+        user = UserModel.objects.create_user(
+            phone=phone,
+            password=password,
+            role=UserModel.Roles.DOCTOR,
+            is_active=True,        # SMS tasdiqlangan
+            is_approved=False      # ADMIN hali tasdiqlamagan
+        )
+
+        # Doctor profile
+        doctor = Doctor.objects.create(
+            user=user,
+            full_name=validated_data['full_name'],
+            gender=validated_data['gender'],
+            birthday=validated_data.get('birthday'),
+            experience=validated_data['experience'],
+            description=validated_data.get('description', ''),
+            type_doctor_id=validated_data['type_doctor'],
+            is_verified=False
+        )
+
+        # Verification (pending)
+        DoctorVerification.objects.create(
+            doctor=doctor,
+            status='pending'
+        )
+
+        return doctor
 
 
 class RateSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = RateDoctor
-        fields = '__all__'
+        fields = ('id', 'doctor', 'rate', 'feedback')
 
     def create(self, validated_data):
-        instance = self.Meta.model(**validated_data)
-        instance.client = self.context['request'].user
-        instance.save()
-        return instance
+        validated_data['client'] = self.context['request'].user
+        return super().create(validated_data)
 
 
-class AdvicecDocSerializer(serializers.Serializer):
-    start_time = serializers.DateTimeField()
-    end_time = serializers.DateTimeField()
-    id = serializers.IntegerField()
+class WorkScheduleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WorkSchedule
+        fields = ['id', 'weekday', 'start_time', 'end_time']
 
+class DoctorUnavailableSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DoctorUnavailable
+        fields = ['id', 'date']
 
-class AdviceSerializer(serializers.ModelSerializer):
-    doctor = DoctorSerializer()
-
+class AdviceTimeSerializer(serializers.ModelSerializer):
     class Meta:
         model = AdviceTime
-        fields = '__all__'
+        fields = ['id', 'doctor', 'client', 'start_time', 'end_time']
+
+class AvailableSlotSerializer(serializers.Serializer):
+    start_time = serializers.DateTimeField()
+    end_time = serializers.DateTimeField()
+
+
+
+# class AdvicecDocSerializer(serializers.Serializer):
+#     start_time = serializers.DateTimeField()
+#     end_time = serializers.DateTimeField()
+#     id = serializers.IntegerField()
+#
+#
+# class AdviceSerializer(serializers.ModelSerializer):
+#     doctor = DoctorSerializer(read_only=True)
+#     doctor_id = serializers.PrimaryKeyRelatedField(
+#         queryset=Doctor.objects.all(),
+#         source='doctor',
+#         write_only=True
+#     )
+#
+#     class Meta:
+#         model = AdviceTime
+#         fields = '__all__'
 
 
 
@@ -115,4 +153,3 @@ class GenderStatisticsSerializer(serializers.Serializer):
     female_percentage = serializers.FloatField()
     male_count = serializers.IntegerField()
     female_count = serializers.IntegerField()
-

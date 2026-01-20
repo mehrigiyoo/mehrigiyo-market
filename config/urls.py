@@ -25,6 +25,7 @@ from rest_framework import permissions
 from rest_framework.views import APIView
 from rest_framework_simplejwt import views as jwt_views
 
+from account.views import UnifiedLoginView
 from config.responses import ResponseSuccess
 from config.views import VersionView
 from news.send_notification import sendPush
@@ -56,19 +57,18 @@ class SendNotificationView(APIView):
         response = sendPush(title=title, description=description, registration_tokens=tokens)
         return ResponseSuccess("Success", request=request.method)
 
-def home(request):
-    return HttpResponse("Welcome to Imorganic!")
+# def home(request):
+#     return HttpResponse("Welcome to Imorganic!")
 
 
 urlpatterns = [
-    path('', home),  # root URL
+    # path('', home),  # root URL
     path('admin/', admin.site.urls),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
 
     path('api/', include([
-        path('login/', jwt_views.TokenObtainPairView.as_view(), name='token_obtain_pair'),
-        path('refresh/', jwt_views.TokenRefreshView.as_view(), name='token_refresh'),
+        path('auth/login/', UnifiedLoginView.as_view(), name='auth-login'),
         path('user/', include('account.urls')),
         path('news/', include('news.urls')),
         path('comment/', include('comment.urls')),
@@ -80,12 +80,13 @@ urlpatterns = [
 
         path('specialist/', include('specialist.urls')),
         path('chat/', include('chat.urls')),
-
+        path('client/', include('client.urls')),
+        path('support/', include('support.urls')),
         path('admin/', include('api.urls')),
 
-        path('config/', include([
-            path('version/', VersionView.as_view())
-        ]))
+        # path('config/', include([
+        #     path('version/', VersionView.as_view())
+        # ]))
     ]))
 ]
 urlpatterns += i18n_patterns(

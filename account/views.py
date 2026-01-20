@@ -1,33 +1,32 @@
-from random import randrange
-
+from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics
 from rest_framework.decorators import action
+from rest_framework.generics import UpdateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
 
-from config.helpers import send_sms_code, validate_sms_code
+from config.helpers import send_sms_code
 from config.responses import ResponseFail, ResponseSuccess
-from paymeuz.models import PaymeTransactionModel
+from config.validators import normalize_phone
 from shop.models import Medicine
 from shop.serializers import MedicineSerializer
-from specialist.models import Doctor
-from specialist.serializers import DoctorSerializer
-from .models import Referrals, UserModel, CountyModel, RegionModel, DeliveryAddress, SmsCode
-from .serializers import (CheckPhoneNumberSerializer, SmsSerializer, ConfirmSmsSerializer, RegistrationSerializer,
+from .models import UserModel, CountyModel, RegionModel, DeliveryAddress, SmsCode
+from .serializers import (CheckPhoneNumberSerializer, SmsSerializer, ConfirmSmsSerializer,
                           RegionSerializer, CountrySerializer, UserSerializer, DeliverAddressSerializer, PkSerializer,
-                          OfferSerializer, ChangePasswordSerializer, ReferalUserSerializer)
+                          OfferSerializer, ChangePasswordSerializer, ReferalUserSerializer, UserAvatarSerializer,
+                          UnifiedLoginSerializer)
 
 
 from django.shortcuts import get_object_or_404
 from django.db.models import Count
 from django_filters import rest_framework as filters
 from rest_framework import filters as rest_filters
-
+now = timezone.now()
 
 class SendSmsThrottle(SimpleRateThrottle):
     scope = "send_sms"
@@ -35,30 +34,15 @@ class SendSmsThrottle(SimpleRateThrottle):
     def get_cache_key(self, request, view):
         return "send_sms"
 
+class UnifiedLoginView(TokenObtainPairView):
+    serializer_class = UnifiedLoginSerializer
 
-class DeleteUserProfileView(APIView):
-    permission_classes = (IsAuthenticated,)
+class UserAvatarUpdateView(UpdateAPIView):
+    serializer_class = UserAvatarSerializer
+    permission_classes = [IsAuthenticated]
 
-    @swagger_auto_schema(
-        operation_id='delete_user_profile',
-        operation_description="delete_user_profile"
-    )
-    def post(self, request):
-        phone_number = request.data['phone_number']
-
-        user = UserModel.objects.get(username=phone_number)
-        self_user = request.user
-
-        if user.id == self_user.id:
-            user.username += f"_deleted_{randrange(1000, 9999)}"
-            user.is_active = False
-            user.save()
-
-            # user.delete()
-            return ResponseSuccess(data="Successfully deleted", request=request.method)
-
-        return ResponseFail(data="User not found or not match", request=request.method)
-
+    def get_object(self):
+        return self.request.user
 
 class CheckPhoneNumberView(APIView):
     @swagger_auto_schema(
@@ -72,7 +56,7 @@ class CheckPhoneNumberView(APIView):
     def post(self, request):
         phone_number = request.data['phone']
 
-        users = UserModel.objects.filter(username=phone_number)
+        users = UserModel.objects.filter(phone=phone_number)
         if len(users) >= 1:
             return ResponseSuccess(True, request=request.method)
 
@@ -80,174 +64,97 @@ class CheckPhoneNumberView(APIView):
 
 
 class SendSmsView(APIView):
-    throttle_classes = [SendSmsThrottle]
-
-    @swagger_auto_schema(
-        operation_id='send_sms',
-        operation_description="send_sms",
-        request_body=SmsSerializer(),
-        responses={
-            '200': SmsSerializer()
-        },
-        manual_parameters=[
-            openapi.Parameter('link', openapi.IN_QUERY, description="for link",
-                              type=openapi.TYPE_BOOLEAN)
-        ],
-    )
     def post(self, request):
-        link = request.GET.get('link', False)
-
         serializer = SmsSerializer(data=request.data)
-        if serializer.is_valid():
-            send_sms_code(request, serializer.data['phone'], link, serializer.data['signature'])
-            return ResponseSuccess(request=request.method)
-        return ResponseFail(data=serializer.errors, request=request.method)
+        serializer.is_valid(raise_exception=True)
 
+        phone = normalize_phone(serializer.validated_data['phone'])
+        purpose = serializer.validated_data['purpose']
+
+        send_sms_code(
+            request=request,
+            phone=phone,
+            purpose=purpose
+        )
+
+        return ResponseSuccess(data="SMS yuborildi", request=request.method)
 
 class ConfirmSmsView(APIView):
-    @swagger_auto_schema(
-        operation_id='send_sms_confirm',
-        operation_description="send_sms_confirm",
-        request_body=ConfirmSmsSerializer(),
-        responses={
-            '200': ConfirmSmsSerializer()
-        },
-    )
     def post(self, request):
         serializer = ConfirmSmsSerializer(data=request.data)
-        if serializer.is_valid():
-            if validate_sms_code(serializer.data['phone'], serializer.data['code']):
-                return ResponseSuccess(data="Telefon nomer tasdiqlandi", request=request.method)
-            else:
-                return ResponseFail(data='Code hato kiritilgan', request=request.method)
-        return ResponseFail(data=serializer.errors, request=request.method)
+        serializer.is_valid(raise_exception=True)
 
+        phone = normalize_phone(serializer.validated_data['phone'])
+        code = serializer.validated_data['code']
+        purpose = serializer.validated_data['purpose']
 
-# @DEPRECATED
-# class ForgotPasswordView(APIView):
-#     @swagger_auto_schema(
-#         operation_id='forget-password',
-#         operation_description='forget password'
-#     )
-#     def post(self, request):
-#         phone_number = request.data['username']
-#
-#         try:
-#             user_model = UserModel.objects.get(username=phone_number)
-#         except:
-#             return ResponseFail(data={}, request=request.method)
-#
-#         return ResponseSuccess(data={"s": "ok"}, request=request.method)
-#
-#     @swagger_auto_schema(
-#         operation_id='reset-password',
-#         operation_description='Reset password',
-#     )
-#     def put(self, request):
-#         pass
+        sms = SmsCode.objects.filter(
+            phone=phone,
+            code=code,
+            purpose=purpose,
+            confirmed=False,
+            expire_at__gte=timezone.now()
+        ).first()
 
-class OauthRegisterView(APIView):
-    def get():
-        return ResponseSuccess(data=[])
+        if not sms:
+            return ResponseFail(
+                data="Kod noto‘g‘ri, eskirgan yoki allaqachon ishlatilgan",
+                request=request.method
+            )
 
-    def post(self, request):
-        pass
+        # Kodni tasdiqlaymiz
+        sms.confirmed = True
+        sms.save(update_fields=['confirmed'])
 
+        return ResponseSuccess(
+            data="SMS muvaffaqiyatli tasdiqlandi",
+            request=request.method
+        )
 
-class RegistrationView(APIView):
-
-    # def get(self, request):
-    #     serializer = RegistrationSerializer()
-    #     return ResponseSuccess(data=serializer.data, request=request.method)
-    @swagger_auto_schema(
-        operation_id='registration',
-        operation_description="registration",
-        request_body=RegistrationSerializer(),
-        responses={
-            '200': RegistrationSerializer()
-        },
-    )
-    def post(self, request):
-        number = request.data['username']
-        inviter = request.data['invited']
-        serializer = RegistrationSerializer(data=request.data)
-
-        if serializer.is_valid():
-            numbers = SmsCode.objects.filter(confirmed=True)
-            access = False
-            for i in numbers:
-                if number == i.phone:
-                    access = True
-                    i.confirmed = False
-                    i.save()
-
-            if access:
-                user = serializer.save()
-
-                # TODO: make transactions!!!
-
-                if inviter and inviter is not None:
-                    inviter_user = UserModel.objects.filter(username=inviter).exists()
-
-                    if inviter_user:
-                        inviter_user = UserModel.objects.get(username=inviter)
-                        try:
-                            Referrals.objects.create(
-                                user=inviter_user,
-                                invited_user=user.username
-                            )
-
-                            PaymeTransactionModel.objects.create(
-                                request_id=inviter,
-                                order_id=number,
-                                phone=user.username,
-                                amount=10000 * 100,
-                                status='processing',
-                                _type='referal',
-                            )
-
-                        except:
-                            user.delete()
-
-                access_token = AccessToken().for_user(user)
-                refresh_token = RefreshToken().for_user(user)
-
-                return ResponseSuccess(data=dict({
-                    "refresh": str(refresh_token),
-                    "access": str(access_token)
-                }), request=request.method)
-            else:
-                return ResponseFail(data='Ushbu raqam sms tekshiruvidan o\'tmagan', request=request.method)
-        else:
-            return ResponseFail(data=serializer.errors, request=request.method)
 
 
 class ChangePassword(APIView):
-    @swagger_auto_schema(
-        operation_id='change_password',
-        operation_description="Password change",
-        request_body=ChangePasswordSerializer(),
-    )
+    """
+    SMS kodi tasdiqlangan user uchun password o'zgartirish
+    """
     def post(self, request):
         serializer = ChangePasswordSerializer(data=request.data)
-        if serializer.is_valid():
-            numbers = SmsCode.objects.filter(confirmed=True)
-            access = False
-            for i in numbers:
-                if serializer.data['phone'] == i.phone:
-                    access = True
-                    i.confirmed = False
-                    i.save()
-            if access:
-                user = UserModel.objects.get(username=serializer.data['phone'])
-                user.set_password(serializer.data['new_password'])
-                user.save()
-                return ResponseSuccess()
-            else:
-                return ResponseFail(data='Ushbu raqam sms tekshiruvidan o\'tmagan')
-        else:
-            return ResponseFail(data=serializer.errors)
+        serializer.is_valid(raise_exception=True)
 
+        phone = normalize_phone(serializer.validated_data['phone'])
+        new_password = serializer.validated_data['new_password']
+
+        #  SMS code tasdiqlanganmi?
+        sms = SmsCode.objects.filter(
+            phone=phone,
+            confirmed=True,
+            expire_at__gt=timezone.now()
+        ).order_by('-created_at').first()
+
+        if not sms:
+            return Response(
+                {"detail": "SMS kod tasdiqlanmagan yoki eskirgan"},
+                status=400
+            )
+
+        #  Userni olish
+        try:
+            user = UserModel.objects.get(phone=phone)
+        except UserModel.DoesNotExist:
+            return Response({"detail": "Foydalanuvchi topilmadi"}, status=404)
+
+        # Passwordni yangilash
+        user.set_password(new_password)
+        user.save()
+
+        # SMS code bir martalik bo‘lishi uchun
+        sms.confirmed = False
+        sms.save()
+
+        return Response(
+            {"detail": "Password muvaffaqiyatli o‘zgartirildi"},
+            status=200
+        )
 
 class UserView(generics.ListAPIView, generics.UpdateAPIView):
     queryset = UserModel.objects.all()
@@ -421,59 +328,6 @@ class MedicineView(generics.ListAPIView, APIView):
         return ResponseSuccess(request=request.method)
 
 
-class DoctorView(generics.ListAPIView, APIView):
-    permission_classes = (IsAuthenticated,)
-    serializer_class = DoctorSerializer
-
-    @swagger_auto_schema(
-        operation_id='get_favorite_doctors',
-        operation_description="get_favorite_doctors",
-        # request_body=UserSerializer(),
-        responses={
-            '200': DoctorSerializer()
-        },
-    )
-    def get(self, request, *args, **kwargs):
-        self.queryset = request.user.favorite_doctor.all()
-        return self.list(request, *args, **kwargs)
-
-    @swagger_auto_schema(
-        operation_id='add_favorite_doctor',
-        operation_description="add_favorite_doctor",
-        request_body=PkSerializer(),
-        # responses={
-        #     '200': MedicineSerializer()
-        # },
-    )
-    def post(self, request):
-        try:
-            doc = Doctor.objects.get(id=request.data['pk'])
-        except:
-            return ResponseFail(data='Bunday doktr mavjud emas', request=request.method)
-        user = request.user
-        user.favorite_doctor.add(doc)
-        user.save()
-        return ResponseSuccess(request=request.method)
-
-    @swagger_auto_schema(
-        operation_id='remove_favorite_doctor',
-        operation_description="add_favorite_doctor",
-        request_body=PkSerializer(),
-        # responses={
-        #     '200': MedicineSerializer()
-        # },
-    )
-    def delete(self, request):
-        try:
-            doc = Doctor.objects.get(id=request.data['pk'])
-        except:
-            return ResponseFail(data='Bunday doktor mavjud emas', request=request.method)
-        user = request.user
-        user.favorite_doctor.remove(doc)
-        user.save()
-        return ResponseSuccess(request=request.method)
-
-
 class DeliverAddressView(generics.ListAPIView, APIView):
     permission_classes = (IsAuthenticated,)
     serializer_class = DeliverAddressSerializer
@@ -633,7 +487,7 @@ class UserFilterAPI(filters.FilterSet):
     class Meta:
         model = UserModel
         fields = {
-            'username': ['exact', 'icontains'],
+            'phone': ['exact', 'icontains'],
             'email': ['exact', 'icontains'],
             'is_active': ['exact'],
             'last_name': ['exact', 'icontains'],
@@ -645,8 +499,8 @@ class UserForAdminViewAPI(generics.ListAPIView):
     serializer_class = UserSerializer
     filter_backends = (filters.DjangoFilterBackend, rest_filters.OrderingFilter)
     filterset_class = UserFilterAPI
-    ordering_fields = ['username', 'email', 'is_active']
-    ordering = ['username',]
+    ordering_fields = ['phone', 'email', 'is_active']
+    ordering = ['phone',]
 
 
     def get_queryset(self):

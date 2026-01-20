@@ -1,9 +1,9 @@
 from admin_auto_filters.filters import AutocompleteFilter
-
 from django.contrib import admin
-from .models import UserModel, CountyModel, RegionModel, DeliveryAddress, OfferModel, Referrals, SmsCode
+from .models import CountyModel, RegionModel, DeliveryAddress, OfferModel, Referrals, SmsCode
 from modeltranslation.admin import TabbedTranslationAdmin
-from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from account.models import UserModel
 
 
 class CountryFilter(AutocompleteFilter):
@@ -15,40 +15,38 @@ class RegionFilter(AutocompleteFilter):
     title = "Region"
     field_name = 'region'
 
-
-class AddressFilter(AutocompleteFilter):
-    title = "Region"
-    field_name = 'address'
-
+# class AddressFilter(AutocompleteFilter):
+#     title = "Region"
+#     field_name = 'region'
 
 class UserFilter(AutocompleteFilter):
     title = "User"
     field_name = 'user'
 
 
-class CustomUserAdmin(UserAdmin):
-    # add_form = CustomUserCreationForm
-    # form = CustomUserChangeForm
+@admin.register(UserModel)
+class CustomUserAdmin(BaseUserAdmin):
     model = UserModel
-    list_display = ('username', 'email', 'address', 'language', 'theme_mode', 'specialist_doctor', 'notificationKey', 'is_staff', 'is_active',)
-    list_filter = (AddressFilter, 'language', 'theme_mode', 'is_staff', 'is_active',)
+    list_display = ('phone','role','language','theme_mode','is_staff','is_active')
+    list_filter = ('role','language','theme_mode','is_staff','is_active')
+    search_fields = ('phone','email','id')
+    ordering = ('phone',)
+    filter_horizontal = ['favorite_medicine',]
+
     fieldsets = (
-        (None, {'fields': ('username', 'password', 'first_name', 'last_name', 'email', 'avatar', 'address', 'language',
-                'favorite_medicine', 'favorite_doctor', 'theme_mode', 'specialist_doctor')}),
-        ('Permissions', {'fields': ('is_staff', 'is_active', 'is_superuser')}),
+        (None, {'fields': ('phone','email','avatar','language','theme_mode','favorite_medicine')}),
+        ('Permissions', {'fields': ('is_staff','is_active','is_superuser')}),
     )
     add_fieldsets = (
-        (None, {
-            'classes': ('wide',),
-            'fields': ('username', 'first_name', 'last_name', 'password1', 'password2',
-                       'is_staff',
-                       'is_active')}
-         ),
+        (None, {'classes':('wide',),
+                'fields':('phone','password1','password2','is_staff','is_active')}),
     )
-    search_fields = ('username', 'email', 'id', 'notificationKey',)
-    autocomplete_fields = ['address', 'specialist_doctor']
-    filter_horizontal = ['favorite_medicine', 'favorite_doctor',]
-    ordering = ('username',)
+
+    def save_model(self, request, obj, form, change):
+        if not change and obj.role in [UserModel.Roles.DOCTOR, UserModel.Roles.OPERATOR]:
+            obj.set_unusable_password()
+            obj.is_active = False
+        super().save_model(request, obj, form, change)
 
 
 class CountryAdmin(TabbedTranslationAdmin):
@@ -111,7 +109,6 @@ class SmsCodeAdmin(admin.ModelAdmin):
     list_per_page = 25
 
 
-admin.site.register(UserModel, CustomUserAdmin)
 admin.site.register(CountyModel, CountryAdmin)
 admin.site.register(RegionModel, RegionAdmin)
 admin.site.register(DeliveryAddress, DeliveryAddressAdmin)

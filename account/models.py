@@ -1,86 +1,62 @@
-from django.core.validators import EmailValidator
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
-from config.validators import PhoneValidator
-from shop.models import Medicine
-from specialist.models import Doctor
+from config.validators import PhoneValidator, normalize_phone
 import datetime
-
-# from django.utils.translation import gettext as _
 
 today = datetime.date.today()
 
-
 class UserManager(BaseUserManager):
+    def _create_user(self, phone, password=None, **extra_fields):
+        phone = normalize_phone(phone)
 
-    def __create_user(self, username, password, **kwargs):
-        username = PhoneValidator.clean(username)
-        validator = PhoneValidator()
-        validator(username)
+        user = self.model(phone=phone, **extra_fields)
 
-        user = UserModel(**kwargs)
-        user.username = username
-        user.set_password(password)
-        user.save()
+        if password:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
 
-    def create_user(self, *args, **kwargs):
-        kwargs.setdefault('is_staff', False)
-        kwargs.setdefault('is_superuser', False)
+        user.save(using=self._db)
+        return user
 
-        if kwargs.get('is_staff') or kwargs.get('is_superuser'):
-            raise Exception("User is_staff=False va is_superuser=False bo'lishi shart!")
+    def create_user(self, phone, password=None, **extra_fields):
+        extra_fields.setdefault("is_staff", False)
+        extra_fields.setdefault("is_superuser", False)
+        return self._create_user(phone, password, **extra_fields)
 
-        return self.__create_user(*args, **kwargs)
-
-    def create_superuser(self, *args, **kwargs):
-        kwargs.setdefault('is_staff', True)
-        kwargs.setdefault('is_superuser', True)
-
-        if not kwargs.get('is_staff') or not kwargs.get('is_superuser'):
-            raise Exception("User is_staff=True va is_superuser=True bo'lishi shart!")
-
-        return self.__create_user(*args, **kwargs)
-
+    def create_superuser(self, phone, password, **extra_fields):
+        extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_superuser", True)
+        return self._create_user(phone, password, **extra_fields)
 
 class UserModel(AbstractUser):
+    username = None
+    class Roles(models.TextChoices):
+        CLIENT = 'client', 'Client'
+        DOCTOR = 'doctor', 'Doctor'
+        OPERATOR = 'operator', 'Operator'
+
     objects = UserManager()
-    #    username = models.CharField(max_length=15, unique=True, help_text="Пожалуйста, укажите свой пароль")
-    username = models.CharField(max_length=256, unique=True,validators=[PhoneValidator()],
-                                help_text="Пожалуйста, укажите свой пароль")
-    password = models.CharField(max_length=256, null=True, blank=True)
-    email = models.EmailField(validators=[EmailValidator()], null=True, blank=True)
-    avatar = models.ImageField(upload_to=f'avatars/{today.year}-{today.month}-{today.month}/', null=True, blank=True)
-    address = models.ForeignKey('RegionModel', on_delete=models.RESTRICT, null=True, blank=True)
-    language = models.CharField(max_length=3, null=True, blank=True)
-    favorite_medicine = models.ManyToManyField(Medicine, blank=True, related_name='fav_med')
-    favorite_doctor = models.ManyToManyField(Doctor, blank=True, related_name='fav_dock')
 
-    # referrals = models.ManyToManyField(Referrals, blank=True, related_name='referrals')
+    phone = models.CharField(max_length=20, unique=True, validators=[PhoneValidator()])
+    role = models.CharField(max_length=20, choices=Roles.choices, default=Roles.CLIENT)
+    email = models.EmailField(null=True, blank=True)
+    avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
+    language = models.CharField(max_length=3, default='uz')
+    theme_mode = models.SmallIntegerField(choices=((1,'Black'),(2,'White')), default=1)
+    notification_key = models.CharField(max_length=255, null=True, blank=True)
+    favorite_medicine = models.ManyToManyField('shop.Medicine', blank=True, related_name='fav_users')
+    is_active = models.BooleanField(default=True)
+    is_approved = models.BooleanField(default=False)
 
-    WHITE = 1
-    BLACK = 2
-    USER_THEMES = [
-        WHITE,
-        BLACK
-    ]
-    theme_mode = models.SmallIntegerField(choices=(
-        (BLACK, 'Black'),
-        (WHITE, 'White')
-    ), default=1, db_index=True)
+    USERNAME_FIELD = 'phone'   # login uchun default field
+    REQUIRED_FIELDS = []        # email yoki first_name, last_name optional
 
-    specialist_doctor = models.ForeignKey(Doctor, on_delete=models.RESTRICT,
-                                          null=True, blank=True, related_name='worker')
-    doctor = models.ForeignKey(Doctor, on_delete=models.RESTRICT, null=True)
+    def is_client(self): return self.role == self.Roles.CLIENT
+    def is_doctor(self): return self.role == self.Roles.DOCTOR
+    def is_operator(self): return self.role == self.Roles.OPERATOR
 
-    notificationKey = models.CharField(max_length=255, null=True, blank=True)
-    username_validator = PhoneValidator()
-
-    class Meta:
-        verbose_name = "user"
-        verbose_name_plural = "users"
-
-    def __str__(self):
-        return f"ID{self.id} {self.username}"
+    def __str__(self): return f"{self.id} | {self.phone} | {self.role}"
 
 
 # Referrals
@@ -95,14 +71,26 @@ class Referrals(models.Model):
 
 # Sms kode
 class SmsCode(models.Model):
+    PURPOSE_CHOICES = (
+        ('register', 'Register account'),
+        ('reset_password', 'Reset password'),
+    )
+
     phone = models.CharField(max_length=16, db_index=True)
     ip = models.GenericIPAddressField(db_index=True)
-    code = models.CharField(max_length=10)
+    code = models.CharField(max_length=6)
+    purpose = models.CharField(max_length=30, choices=PURPOSE_CHOICES)
     expire_at = models.DateTimeField(db_index=True)
     confirmed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
 
     class Meta:
         index_together = []
+        indexes = [
+            models.Index(fields=['phone']),
+            models.Index(fields=['expire_at']),
+        ]
 
     def __str__(self):
         return f"{self.phone}: {self.code} ({self.expire_at})"

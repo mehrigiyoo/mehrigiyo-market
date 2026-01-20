@@ -1,6 +1,4 @@
 from django.db import models
-from config.settings import BASE_DIR
-
 
 class TypeDoctor(models.Model):
     name = models.CharField(max_length=100)
@@ -10,28 +8,65 @@ class TypeDoctor(models.Model):
         return self.name
 
     def get_doctors_count(self):
-        sum = Doctor.objects.filter(type_doctor=self)
-        return len(sum)
+        return Doctor.objects.filter(type_doctor=self).count()
+
 
 # Doctor model change gender,birthday,
 class Doctor(models.Model):
-    GENDER_CHOICES = [
-        ('male', 'Male'),
-        ('female', 'Female'),
-    ]
-    image = models.ImageField(upload_to=f'doctor/', blank=True, default='defaults/60111.jpg')
-    #  default=BASE_DIR /'60111.jpg')
-    full_name = models.CharField(max_length=255, null=True)
-    review = models.IntegerField(default=0)
-    experience = models.CharField(max_length=50, null=True)
-    description = models.TextField(null=True)
-    type_doctor = models.ForeignKey(TypeDoctor, on_delete=models.RESTRICT, null=True)
-    created_at = models.DateTimeField(auto_now=True, null=True)
-    birthday = models.DateField(null=True)
-    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, default="male")
+    user = models.OneToOneField(
+        'account.UserModel',
+        on_delete=models.CASCADE,
+        related_name='doctor'
+    )
+
+    image = models.ImageField(upload_to='doctors/', default='defaults/doctor.jpg')
+    full_name = models.CharField(max_length=255)
+    experience = models.CharField(max_length=50)
+    description = models.TextField(blank=True)
+    type_doctor = models.ForeignKey(TypeDoctor, on_delete=models.RESTRICT)
+    top = models.BooleanField(default=False)
+    birthday = models.DateField(null=True, blank=True)
+    gender = models.CharField(
+        max_length=10,
+        choices=(('male', 'Male'), ('female', 'Female'))
+    )
+
+    review = models.FloatField(default=0)
+    view_count = models.PositiveIntegerField(default=0)
+    is_verified = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
 
     def __str__(self):
-        return self.full_name
+        return f"Doctor: {self.full_name}"
+
+
+class DoctorVerification(models.Model):
+    doctor = models.OneToOneField(
+        Doctor,
+        on_delete=models.CASCADE,
+        related_name='verification'
+    )
+
+    diploma = models.FileField(upload_to='doctor_docs/diplomas/')
+    # passport = models.FileField(upload_to='doctor_docs/passports/', null=True, blank=True)
+
+    license_number = models.CharField(max_length=100, null=True, blank=True)
+    license_expire_date = models.DateField(null=True, blank=True)
+
+    workplace = models.CharField(max_length=255, blank=True)
+
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    admin_comment = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
 
 
 FEEDBACK = (
@@ -43,14 +78,30 @@ FEEDBACK = (
 
 
 class RateDoctor(models.Model):
-    client = models.ForeignKey('account.UserModel', on_delete=models.RESTRICT)
-    doctor = models.ForeignKey(Doctor, on_delete=models.RESTRICT)
-    rate = models.SmallIntegerField(default=4, choices=((1, '1'), (2, '2'), (3, '3'), (4, '4'), (5, '5')))
-    feedback = models.SmallIntegerField(default=1, choices=FEEDBACK)
-    created_at = models.DateTimeField(auto_now=True, null=True)
+    client = models.ForeignKey(
+        'account.UserModel',
+        on_delete=models.CASCADE,
+        limit_choices_to={'role': 'client'}
+    )
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
 
-    def __str__(self):
-        return f"{self.client}'s rate for {self.doctor} is {self.rate}"
+    rate = models.PositiveSmallIntegerField(choices=[(i, i) for i in range(1, 6)])
+    feedback = models.PositiveSmallIntegerField(choices=FEEDBACK)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['client', 'doctor'],
+                name='unique_client_doctor_rating'
+            )
+        ]
+
+# class AdviceStatus(models.TextChoices):
+#     PENDING = 'pending'
+#     CONFIRMED = 'confirmed'
+#     CANCELED = 'canceled'
+#     FINISHED = 'finished'
 
 
 class AdviceTime(models.Model):
@@ -58,7 +109,12 @@ class AdviceTime(models.Model):
     client = models.ForeignKey('account.UserModel', on_delete=models.RESTRICT)
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
-    status = models.BooleanField(default=True)
+    # status = models.CharField(
+    #     max_length=20,
+    #     choices=AdviceStatus.choices,
+    #     default=AdviceStatus.PENDING,
+    #     db_index=True
+    # )
 
     def __str__(self):
         return f"{self.doctor}'s advice time for {self.client} from {self.start_time} to {self.end_time}"
@@ -68,7 +124,51 @@ class Advertising(models.Model):
     image = models.ImageField(upload_to=f'doctor/advertising/', null=True, blank=True)
     title = models.CharField(max_length=255)
     text = models.TextField()
+    is_active = models.BooleanField(default=True, db_index=True)
+    start_at = models.DateTimeField(null=True, blank=True)
+    end_at = models.DateTimeField(null=True, blank=True)
     doctor = models.ForeignKey(Doctor, on_delete=models.RESTRICT, null=True, blank=True)
 
     def __str__(self):
-        return f"{self.doctor}'s advertisement: {self.title} ({self.text})"
+        if self.doctor:
+            return f"Ad for {self.doctor.full_name}: {self.title}"
+        return f"General Ad: {self.title}"
+
+
+class WorkSchedule(models.Model):
+    """
+    Doctorning haftalik ish jadvali
+    """
+    WEEKDAYS = (
+        (0, "Monday"),
+        (1, "Tuesday"),
+        (2, "Wednesday"),
+        (3, "Thursday"),
+        (4, "Friday"),
+        (5, "Saturday"),
+        (6, "Sunday"),
+    )
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name='work_schedules')
+    weekday = models.IntegerField(choices=WEEKDAYS)  # Hafta kuni
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+
+    class Meta:
+        unique_together = ('doctor', 'weekday', 'start_time', 'end_time')
+
+    def __str__(self):
+        return f"{self.doctor.full_name} - {self.get_weekday_display()} {self.start_time}-{self.end_time}"
+
+
+class DoctorUnavailable(models.Model):
+    """
+    Doctor ishlay olmaydigan kunlar
+    """
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name='unavailable_days')
+    date = models.DateField()
+
+    class Meta:
+        unique_together = ('doctor', 'date')
+
+    def __str__(self):
+        return f"{self.doctor.full_name} unavailable on {self.date}"

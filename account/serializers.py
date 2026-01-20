@@ -1,5 +1,7 @@
 from rest_framework import serializers
-from .models import UserModel, CountyModel, RegionModel, DeliveryAddress, OfferModel
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from .models import UserModel, CountyModel, RegionModel, DeliveryAddress, OfferModel, Referrals
 from config.validators import PhoneValidator
 
 
@@ -28,36 +30,119 @@ class CheckPhoneNumberSerializer(serializers.Serializer):
 
 class SmsSerializer(serializers.Serializer):
     phone = serializers.CharField(validators=[PhoneValidator()])
-    signature = serializers.CharField(required=False, default="")
+    purpose = serializers.ChoiceField(
+        choices=['register', 'activate', 'reset_password']
+    )
 
 
 class ConfirmSmsSerializer(serializers.Serializer):
     phone = serializers.CharField(validators=[PhoneValidator()])
     code = serializers.CharField(min_length=6, max_length=6)
+    purpose = serializers.ChoiceField(
+        choices=['register', 'activate', 'reset_password']
+    )
+
 
 
 class ChangePasswordSerializer(serializers.Serializer):
-    phone = serializers.CharField(max_length=50, min_length=6)
-    new_password = serializers.CharField(max_length=50, min_length=6)
+    phone = serializers.CharField()
+    new_password = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True, min_length=8)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['confirm_password']:
+            raise serializers.ValidationError("Parollar mos kelmadi")
+        return attrs
+
+class UnifiedLoginSerializer(TokenObtainPairSerializer):
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        user = self.user
+
+        if not user.is_active:
+            raise AuthenticationFailed("Account faol emas")
+
+        if user.role == UserModel.Roles.DOCTOR and not user.is_approved:
+            raise AuthenticationFailed(
+                "Profilingiz admin tomonidan tasdiqlanmagan"
+            )
+
+        return data
 
 
-class RegistrationSerializer(serializers.ModelSerializer):
+class UserAvatarSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserModel
-        fields = ['username', 'first_name', 'last_name', 'password', 'email', 'avatar']
-        extra_kwargs = {
-            'password': {'write_only': True},
-            'avatar': {'required': False},
-            'email': {'required': False}
-        }
+        fields = ('avatar',)
 
-    def create(self, validated_data):
-        password = validated_data.pop('password', None)
-        instance = self.Meta.model(**validated_data)
-        if password is not None:
-            instance.set_password(password)
-        instance.save()
-        return instance
+
+# class RegistrationSerializer(serializers.ModelSerializer):
+#     invited = serializers.CharField(required=False, write_only=True)
+#     password2 = serializers.CharField(write_only=True)  # password confirm
+#
+#     class Meta:
+#         model = UserModel
+#         fields = [
+#             'phone', 'first_name', 'last_name',
+#             'password', 'password2', 'email', 'avatar', 'role', 'invited'
+#         ]
+#         extra_kwargs = {
+#             'password': {'write_only': True},
+#             'avatar': {'required': False},
+#             'email': {'required': False},
+#             'role': {'required': False}
+#         }
+#
+#     def validate(self, attrs):
+#         if attrs.get('password') != attrs.get('password2'):
+#             raise serializers.ValidationError({"password": "Passwordlar mos kelmayapti!"})
+#
+#         attrs['role'] = UserModel.Roles.CLIENT
+#         return attrs
+#
+#     def create(self, validated_data):
+#         inviter_code = validated_data.pop('invited', None)
+#         validated_data.pop('password2', None)  # password2 faqat tekshiruv uchun
+#
+#         password = validated_data.pop('password', None)
+#         user = UserModel.objects.create_user(password=password, **validated_data)
+#         user.role = UserModel.Roles.CLIENT
+#         user.save()
+#
+#         # ClientProfile yaratish
+#         from client.models import ClientProfile
+#         ClientProfile.objects.create(user=user)
+#
+#         # Referral va Payme jarayoni
+#         if inviter_code:
+#             inviter_qs = UserModel.objects.filter(phone=inviter_code).first()
+#             if inviter_qs:
+#                 try:
+#                     Referrals.objects.create(
+#                         user=inviter_qs,
+#                         invited_user=user.phone
+#                     )
+#                     PaymeTransactionModel.objects.create(
+#                         request_id=inviter_code,
+#                         order_id=user.phone,
+#                         phone=user.phone,
+#                         amount=10000 * 100,
+#                         status='processing',
+#                         _type='referal',
+#                     )
+#                 except Exception:
+#                     user.delete()
+#                     raise serializers.ValidationError("Referral jarayoni muvaffaqiyatsiz bo‘ldi.")
+#
+#         return user
+
+class CustomTokenSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        data['role'] = self.user.role
+        return data
 
 
 class CountrySerializer(serializers.ModelSerializer):
@@ -80,12 +165,11 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserModel
-        fields = ['id', 'username', 'first_name', 'last_name', 'email', 'avatar', 'address', 'language',
-                  'favorite_medicine', 'favorite_doctor', 'theme_mode', 'is_staff', 'is_superuser']
+        fields = ['id', 'phone', 'first_name', 'last_name', 'email', 'avatar', 'address', 'language',
+                  'favorite_medicine', 'theme_mode', 'is_staff', 'is_superuser']
         extra_kwargs = {
-            'username': {'read_only': True},
+            'phone': {'read_only': True},
             'favorite_medicine': {'read_only': True},
-            'favorite_doctor': {'read_only': True},
             'address': {'read_only': True},
             'first_name': {'required': False},
             'last_name': {'required': False},
@@ -120,4 +204,4 @@ class ReferalUserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserModel
-        fields = ['id', 'username', 'first_name', 'last_name', 'referral_count', 'is_active']
+        fields = ['id', 'phone', 'first_name', 'last_name', 'referral_count', 'is_active']
