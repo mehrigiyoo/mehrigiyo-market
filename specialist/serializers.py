@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from account.models import UserModel
-from config.validators import PhoneValidator
+from config.validators import PhoneValidator, normalize_phone
 from .models import Doctor, TypeDoctor, RateDoctor, Advertising, AdviceTime, WorkSchedule, DoctorUnavailable, \
     DoctorVerification
 
