@@ -34,12 +34,12 @@ class CustomUserAdmin(BaseUserAdmin):
     filter_horizontal = ['favorite_medicine',]
 
     fieldsets = (
-        (None, {'fields': ('phone','email','avatar','language','theme_mode','favorite_medicine')}),
+        (None, {'fields': ('phone','email','avatar','language','theme_mode','favorite_medicine', 'is_approved')}),
         ('Permissions', {'fields': ('is_staff','is_active','is_superuser')}),
     )
     add_fieldsets = (
         (None, {'classes':('wide',),
-                'fields':('phone','password1','password2','is_staff','is_active')}),
+                'fields':('phone','password1','password2','is_staff', 'is_active', 'is_approved')}),
     )
 
     def save_model(self, request, obj, form, change):
