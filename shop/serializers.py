@@ -18,30 +18,20 @@ class TypeMedicineSerializer(serializers.ModelSerializer):
 
 
 class MedicineSerializer(serializers.ModelSerializer):
-    pictures = PicturesMedicineSerializer(
-        many=True,
-        read_only=True
-    )
-    is_favorite = serializers.SerializerMethodField(method_name="get_favorites")
-    feedbacks = serializers.SerializerMethodField(method_name="get_feedbacks")
-    instructions = serializers.SerializerMethodField(method_name="get_instructions")
+    pictures = PicturesMedicineSerializer(many=True, read_only=True)
+    rate = serializers.SerializerMethodField()
+    is_favorite = serializers.SerializerMethodField()
+    feedbacks = serializers.SerializerMethodField()
+    instructions = serializers.SerializerMethodField()
 
-    def get_instructions(self, medicine: Medicine):
-        result = []
+    def get_rate(self, obj):
+        return obj.total_rate or 0
 
-        try:
-            feedbacks = Feedbacks.objects.filter(medicine=medicine, type="product_instruction")
-
-            for feedback in feedbacks:
-                video_id = feedback.link.split("/").pop()
-                result.append({
-                    "link": feedback.link,
-                    "image": f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
-                })
-
-            return result
-        except:
-            return result
+    def get_is_favorite(self, obj):
+        user = self.context.get('user')
+        if not user or user.is_anonymous:
+            return False
+        return user.favorite_medicine.filter(id=obj.id).exists()
 
     def _get_feedback(self, medicine, feedback_type):
         return [
@@ -55,96 +45,24 @@ class MedicineSerializer(serializers.ModelSerializer):
             )
         ]
 
-    def get_feedback_client(self, medicine: Medicine):
-        result = []
+    def get_feedbacks(self, obj):
+        return self._get_feedback(obj, "feedback_product")
 
-        try:
-            feedbacks = Feedbacks.objects.filter(medicine=medicine, type="feedback_client")
-
-            for feedback in feedbacks:
-                video_id = feedback.link.split("/").pop()
-                result.append({
-                    "link": feedback.link,
-                    "image": f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
-                })
-
-            return result
-        except:
-            return result
-
-    def get_is_favorite(self, medicine):
-        user = self.context.get('user')
-        if not user or user.is_anonymous:
-            return False
-
-        return user.favorite_medicine.filter(id=medicine.id).exists()
-
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        # try:
-        #     user = self.context['user']
-        #     if instance in user.favorite_medicine.all():
-
-        #         representation['is_favorite'] = True
-        #     else:
-        #         representation['is_favorite'] = False
-        # except:
-        #     pass
-        try:
-            representation['rate'] = instance.total_rate or 0
-        except:
-            pass
-        return representation
+    def get_instructions(self, obj):
+        return self._get_feedback(obj, "product_instruction")
 
     class Meta:
         model = Medicine
         fields = [
-            # asosiy fieldlar
-            'id',
-            'image',
-            'name',
-            'title',
-            'order_count',
-            'description',
-            'quantity',
-            'review',
-            'weight',
-            'type_medicine',
-            'cost',
-            'discount',
-            'created_at',
-
-            'product_inn',
-            'product_ikpu',
-            'product_package_code',
-
-            'content_uz',
-            'content_ru',
-            'content_en',
-
-            'features_uz',
-            'features_ru',
-            'features_en',
-
-            'certificates_uz',
-            'certificates_ru',
-            'certificates_en',
-
-            'application_uz',
-            'application_ru',
-            'application_en',
-
-            'contraindications_uz',
-            'contraindications_ru',
-            'contraindications_en',
-
-            'rate',
-            'is_favorite',
-            'feedbacks',
-            'instructions',
-
-            # ENG OXIRIDA IMAGELAR
-            'pictures',
+            'id', 'image', 'name', 'title', 'order_count', 'description',
+            'quantity', 'review', 'weight', 'type_medicine', 'cost', 'discount',
+            'created_at', 'product_inn', 'product_ikpu', 'product_package_code',
+            'content_uz', 'content_ru', 'content_en',
+            'features_uz', 'features_ru', 'features_en',
+            'certificates_uz', 'certificates_ru', 'certificates_en',
+            'application_uz', 'application_ru', 'application_en',
+            'contraindications_uz', 'contraindications_ru', 'contraindications_en',
+            'rate', 'is_favorite', 'feedbacks', 'instructions', 'pictures'
         ]
 
 class CartSerializer(serializers.ModelSerializer):
