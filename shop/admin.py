@@ -35,9 +35,10 @@ class DeliveryFilter(AutocompleteFilter):
     field_name = 'delivery'
 
 
-class PicturesMedicineAdmin(admin.ModelAdmin):
-    list_display = ['id', 'image', ]
-    search_fields = ['id', ]
+class PicturesMedicineInline(admin.TabularInline):
+    model = PicturesMedicine
+    extra = 1
+    max_num = 10
 
 
 class TypeMedicineAdmin(TabbedTranslationAdmin):
@@ -54,7 +55,8 @@ class MedicineAdmin(TabbedTranslationAdmin):
     search_fields = ['id', 'name', 'title', 'order_count', 'description', 'quantity', 'review', 'weight', 'cost',
                      'discount', ]
     autocomplete_fields = ['type_medicine', ]
-    filter_horizontal = ['pictures', ]
+    inlines = [PicturesMedicineInline]
+
 
 
 class CartModelAdmin(admin.ModelAdmin):
@@ -87,4 +89,3 @@ admin.site.register(Medicine, MedicineAdmin)
 admin.site.register(TypeMedicine, TypeMedicineAdmin)
 admin.site.register(OrderModel, OrderModelAdmin)
 admin.site.register(CartModel, CartModelAdmin)
-admin.site.register(PicturesMedicine, PicturesMedicineAdmin)

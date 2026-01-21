@@ -8,7 +8,7 @@ from account.models import DeliveryAddress, UserModel
 class PicturesMedicineSerializer(serializers.ModelSerializer):
     class Meta:
         model = PicturesMedicine
-        fields = '__all__'
+        fields = ['id', 'image']
 
 
 class TypeMedicineSerializer(serializers.ModelSerializer):
@@ -18,7 +18,10 @@ class TypeMedicineSerializer(serializers.ModelSerializer):
 
 
 class MedicineSerializer(serializers.ModelSerializer):
-    pictures = PicturesMedicineSerializer(many=True)
+    pictures = PicturesMedicineSerializer(
+        many=True,
+        read_only=True
+    )
     is_favorite = serializers.SerializerMethodField(method_name="get_favorites")
     feedbacks = serializers.SerializerMethodField(method_name="get_feedbacks")
     instructions = serializers.SerializerMethodField(method_name="get_instructions")
@@ -40,22 +43,17 @@ class MedicineSerializer(serializers.ModelSerializer):
         except:
             return result
 
-    def get_feedbacks(self, medicine: Medicine):
-        result = []
-
-        try:
-            feedbacks = Feedbacks.objects.filter(medicine=medicine, type="feedback_product")
-
-            for feedback in feedbacks:
-                video_id = feedback.link.split("/").pop()
-                result.append({
-                    "link": feedback.link,
-                    "image": f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
-                })
-
-            return result
-        except:
-            return result
+    def _get_feedback(self, medicine, feedback_type):
+        return [
+            {
+                "link": f.link,
+                "image": f"https://img.youtube.com/vi/{f.link.split('/').pop()}/hqdefault.jpg"
+            }
+            for f in Feedbacks.objects.filter(
+                medicine=medicine,
+                type=feedback_type
+            )
+        ]
 
     def get_feedback_client(self, medicine: Medicine):
         result = []
@@ -74,17 +72,12 @@ class MedicineSerializer(serializers.ModelSerializer):
         except:
             return result
 
-    def get_favorites(self, medicine: Medicine):
-        try:
-            user: UserModel = self.context['user']
+    def get_is_favorite(self, medicine):
+        user = self.context.get('user')
+        if not user or user.is_anonymous:
+            return False
 
-            if medicine in user.favorite_medicine.all():
-                return True
-
-        except:
-            print("error")
-
-        return False
+        return user.favorite_medicine.filter(id=medicine.id).exists()
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -105,8 +98,54 @@ class MedicineSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Medicine
-        fields = "__all__"
+        fields = [
+            # asosiy fieldlar
+            'id',
+            'image',
+            'name',
+            'title',
+            'order_count',
+            'description',
+            'quantity',
+            'review',
+            'weight',
+            'type_medicine',
+            'cost',
+            'discount',
+            'created_at',
 
+            'product_inn',
+            'product_ikpu',
+            'product_package_code',
+
+            'content_uz',
+            'content_ru',
+            'content_en',
+
+            'features_uz',
+            'features_ru',
+            'features_en',
+
+            'certificates_uz',
+            'certificates_ru',
+            'certificates_en',
+
+            'application_uz',
+            'application_ru',
+            'application_en',
+
+            'contraindications_uz',
+            'contraindications_ru',
+            'contraindications_en',
+
+            'rate',
+            'is_favorite',
+            'feedbacks',
+            'instructions',
+
+            # ENG OXIRIDA IMAGELAR
+            'pictures',
+        ]
 
 class CartSerializer(serializers.ModelSerializer):
     product = MedicineSerializer(read_only=True)

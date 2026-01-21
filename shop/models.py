@@ -6,15 +6,6 @@ from specialist.models import Doctor
 
 today = datetime.date.today()
 
-
-class PicturesMedicine(models.Model):
-    image = models.ImageField(upload_to=f'medicine_pictures/{today.year}-{today.month}-{today.month}/',
-                              null=True, blank=True)
-
-    def __str__(self):
-        return f"ID{self.id}: {self.image}"
-
-
 class TypeMedicine(models.Model):
     name = models.CharField(max_length=100)
     image = models.ImageField(upload_to=f'types/', null=True, blank=True)
@@ -26,7 +17,6 @@ class TypeMedicine(models.Model):
 
 class Medicine(models.Model):
     image = models.ImageField(upload_to=f'medicine/', null=True, blank=True)
-    pictures = models.ManyToManyField(PicturesMedicine, blank=True)
     name = models.CharField(max_length=100)
     title = models.CharField(max_length=100)
     order_count = models.IntegerField(default=0)
@@ -65,6 +55,22 @@ class Medicine(models.Model):
 
     def __str__(self):
         return self.name
+
+class PicturesMedicine(models.Model):
+    medicine = models.ForeignKey(
+        'Medicine',
+        on_delete=models.CASCADE,
+        related_name='pictures'
+    )
+    image = models.ImageField(
+        upload_to=f'medicine_pictures/{today.year}-{today.month}-{today.month}/',
+        null=True,
+        blank=True
+    )
+
+    def __str__(self):
+        return f"{self.medicine.name} - {self.id}"
+
 
 
 class CartModel(models.Model):

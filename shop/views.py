@@ -48,59 +48,53 @@ class TypeMedicineView(viewsets.mixins.ListModelMixin, viewsets.GenericViewSet):
 
 
 class MedicinesView(generics.ListAPIView):
-    queryset = Medicine.objects.all()
-    # permission_classes = (IsAuthenticated,)
     serializer_class = MedicineSerializer
     filterset_class = ProductFilter
 
-    @swagger_auto_schema(
-        operation_id='get_doctors',
-        operation_description="get_doctors",
-        # request_body=DoctorSerializer(),
-        responses={
-            '200': MedicineSerializer()
-        },
-        manual_parameters=[
-            openapi.Parameter('type_ides', openapi.IN_QUERY, description="test manual param",
-                              type=openapi.TYPE_STRING)
-        ],
-    )
-    def get(self, request, *args, **kwargs):
-        key = request.GET.get('type_ides', False)
-
-        queryset = self.queryset.annotate(
+    def get_queryset(self):
+        # 1️⃣ bazadan medicine va type_medicine ni bir queryda oladi
+        # 2️⃣ pictures ni prefetch qiladi, N+1 muammosini oldini oladi
+        queryset = Medicine.objects.select_related(
+            'type_medicine'
+        ).prefetch_related(
+            'pictures'
+        ).annotate(
             total_rate=Avg('comments_med__rate')
         ).order_by('-id')
-        filtered_qs = self.filterset_class(request.GET, queryset=queryset).qs
-        for i in filtered_qs:
-            i.review = i.review + 1
-            i.save()
-        self.queryset = filtered_qs
+
+        # filterlarni qo‘llash
+        filtered_qs = self.filterset_class(self.request.GET, queryset=queryset).qs
+
+        # agar type_ides parametri bo‘lsa filter qilish
+        key = self.request.GET.get('type_ides')
         if key:
             keys = key.split(',')
-            self.queryset = self.queryset.filter(type_medicine_id__in=keys)
+            filtered_qs = filtered_qs.filter(type_medicine_id__in=keys)
 
-        return self.list(request, *args, **kwargs)
+        # review ni increment qilish
+        for i in filtered_qs:
+            i.review = i.review + 1
+            i.save(update_fields=['review'])
+
+        return filtered_qs
 
     def get_serializer_context(self):
-        context = super(MedicinesView, self).get_serializer_context()
+        context = super().get_serializer_context()
         context.update({'user': self.request.user})
         return context
 
 
 class MedicineRetrieveView(generics.RetrieveAPIView):
-    queryset = Medicine.objects.all()
     serializer_class = MedicineSerializer
 
-    @swagger_auto_schema(
-        operation_id='doctor-detail',
-        operation_description="retrieving the doctor",
-        responses={
-            '200': MedicineSerializer()
-        },
-    )
-    def get(self, request, *args, **kwargs):
-        return self.retrieve(request, *args, **kwargs)
+    def get_queryset(self):
+        return Medicine.objects.select_related(
+            'type_medicine'
+        ).prefetch_related(
+            'pictures'
+        ).annotate(
+            total_rate=Avg('comments_med__rate')
+        )
 
 
 class GetMedicinesWithType(generics.ListAPIView):
