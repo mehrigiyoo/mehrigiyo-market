@@ -40,7 +40,7 @@ class TagsModelAdmin(TabbedTranslationAdmin):
 
 class StoriesImageInline(admin.TabularInline):
     model = StoriesImage
-    extra = 10  # default yangi bo'sh rasm qo'shish oynasi
+    extra = 1  # default yangi bo'sh rasm qo'shish oynasi
     readonly_fields = ('id',)  # ID ni faqat o'qish uchun
 
 @admin.register(Stories)
