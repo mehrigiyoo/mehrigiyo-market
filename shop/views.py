@@ -447,6 +447,6 @@ class MedicineByTypeView(APIView):
             return Response({"error": "TypeMedicine not found"}, status=404)
 
         medicines = Medicine.objects.filter(type_medicine=type_medicine)
-        serializer = MedicineTypeSerializer(medicines, many=True)
+        serializer = MedicineTypeSerializer(medicines, many=True, context={'request': request})
         return Response(serializer.data)
 
