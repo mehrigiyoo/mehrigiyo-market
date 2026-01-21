@@ -1,14 +1,9 @@
 from django.urls import path
-from rest_framework_simplejwt.views import TokenRefreshView, TokenObtainPairView
+from rest_framework_simplejwt.views import TokenRefreshView
 
-from .serializers import CustomTokenSerializer
-from .views import (CheckPhoneNumberView, SendSmsView, ConfirmSmsView,
-                    CountryView, RegionView, AddAddressView, SetNotificationKeyView,
-                    UserView, MedicineView, DeliverAddressView, OfferView, ChangePassword,
-                    SetRegistrationKeyView, UserForAdminViewAPI, ReferalUserForAdminViewAPI, UserAvatarUpdateView)
+from .views import (SendSmsView, ConfirmSmsView, ChangePassword,  UserAvatarUpdateView)
 
 urlpatterns = [
-    path('login/', TokenObtainPairView.as_view(serializer_class=CustomTokenSerializer)),
     path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('send/sms/', SendSmsView.as_view()),
     path('send/sms/confirm/', ConfirmSmsView.as_view()),

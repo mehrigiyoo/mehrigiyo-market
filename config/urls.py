@@ -22,7 +22,7 @@ from drf_yasg import openapi
 from drf_yasg.views import get_schema_view
 from rest_framework import permissions
 
-from account.views import UnifiedLoginView
+from account.views import LoginView
 
 schema_view = get_schema_view(
     openapi.Info(
@@ -49,7 +49,7 @@ urlpatterns = [
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
 
     path('api/', include([
-        path('auth/login/', UnifiedLoginView.as_view(), name='auth-login'),
+        path('auth/login/', LoginView.as_view(), name='auth-login'),
         path('user/', include('account.urls')),
         path('news/', include('news.urls')),
         path('comment/', include('comment.urls')),

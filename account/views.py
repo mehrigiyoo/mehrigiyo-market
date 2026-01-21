@@ -1,3 +1,4 @@
+from django.contrib.auth import authenticate
 from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
@@ -8,8 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
-from rest_framework_simplejwt.views import TokenObtainPairView
-
+from rest_framework_simplejwt.tokens import RefreshToken
 from config.helpers import send_sms_code
 from config.responses import ResponseFail, ResponseSuccess
 from config.validators import normalize_phone
@@ -19,7 +19,7 @@ from .models import UserModel, CountyModel, RegionModel, DeliveryAddress, SmsCod
 from .serializers import (CheckPhoneNumberSerializer, SmsSerializer, ConfirmSmsSerializer,
                           RegionSerializer, CountrySerializer, UserSerializer, DeliverAddressSerializer, PkSerializer,
                           OfferSerializer, ChangePasswordSerializer, ReferalUserSerializer, UserAvatarSerializer,
-                          UnifiedLoginSerializer)
+                          )
 
 
 from django.shortcuts import get_object_or_404
@@ -34,8 +34,27 @@ class SendSmsThrottle(SimpleRateThrottle):
     def get_cache_key(self, request, view):
         return "send_sms"
 
-class UnifiedLoginView(TokenObtainPairView):
-    serializer_class = UnifiedLoginSerializer
+class LoginView(APIView):
+    def post(self, request):
+        phone = request.data.get("phone")
+        password = request.data.get("password")
+
+        user = authenticate(request, phone=phone, password=password)
+        if not user:
+            return Response({"detail": "No active account found with the given credentials"}, status=401)
+
+        # Doctor tasdiqlanishini tekshirish
+        if user.role == UserModel.Roles.DOCTOR and not user.is_approved:
+            return Response({"detail": "Profilingiz admin tomonidan tasdiqlanmagan"}, status=403)
+
+        # Client, operator yoki tasdiqlangan doctor
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "role": user.role,
+            "is_approved": user.is_approved
+        })
 
 class UserAvatarUpdateView(UpdateAPIView):
     serializer_class = UserAvatarSerializer

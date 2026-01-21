@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import UserModel, CountyModel, RegionModel, DeliveryAddress, OfferModel, Referrals
+from .models import UserModel, CountyModel, RegionModel, DeliveryAddress, OfferModel
 from config.validators import PhoneValidator
 
 
@@ -53,23 +53,6 @@ class ChangePasswordSerializer(serializers.Serializer):
         if attrs['new_password'] != attrs['confirm_password']:
             raise serializers.ValidationError("Parollar mos kelmadi")
         return attrs
-
-class UnifiedLoginSerializer(TokenObtainPairSerializer):
-
-    def validate(self, attrs):
-        data = super().validate(attrs)
-
-        user = self.user
-
-        if not user.is_active:
-            raise AuthenticationFailed("Account faol emas")
-
-        if user.role == UserModel.Roles.DOCTOR and not user.is_approved:
-            raise AuthenticationFailed(
-                "Profilingiz admin tomonidan tasdiqlanmagan"
-            )
-
-        return data
 
 
 class UserAvatarSerializer(serializers.ModelSerializer):
