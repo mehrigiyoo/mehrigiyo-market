@@ -1,6 +1,6 @@
 from django.urls import path
-from .views import NewsView, NewsRetrieveView, StoriesRetrieveView, StoriesView, TagView, AdvertisingShopView, \
-    NotificationView, LinksListApiView
+from .views import NewsView, NewsRetrieveView, TagView, AdvertisingShopView, \
+    NotificationView, LinksListApiView, StoriesDetailView, StoriesListView
 
 urlpatterns = [
     path('', NewsView.as_view()),
@@ -10,8 +10,8 @@ urlpatterns = [
     path('notification/', NotificationView.as_view()),
     # path('notification/call/', NotificationCallView.as_view()),
 
-    path('stories/', StoriesView.as_view()),
-    path('stories/<int:pk>', StoriesRetrieveView.as_view()),
+    path('stories/', StoriesListView.as_view(), name='stories-list'),
+    path('stories/<int:pk>/', StoriesDetailView.as_view(), name='stories-detail'),
 
     path('links/', LinksListApiView.as_view()),
 ]

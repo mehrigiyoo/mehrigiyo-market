@@ -103,58 +103,13 @@ class TagView(APIView):
     #     return self.list(request, *args, **kwargs)
 
 
-class StoriesView(generics.ListAPIView):
-    queryset = Stories.objects.all()
+class StoriesListView(generics.ListAPIView):
+    queryset = Stories.objects.prefetch_related('images').all()
     serializer_class = StoriesSerializer
 
-    def filter_queryset(self, queryset: QuerySet[Stories]):
-        return queryset.exclude(contents=None).order_by("id")
-
-    @swagger_auto_schema(
-        operation_id="stories-list",
-        operation_description="list stories",
-        responses={"200": StoriesSerializer()},
-    )
-    def get(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
-
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-
-            for stories in serializer.data:
-                contents = stories["contents"]
-                contents.sort(key=lambda x: x["id"])
-
-            return self.get_paginated_response(serializer.data)
-
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
-
-    # def get(self, request, *args, **kwargs):
-    #     return self.list(request, *args, **kwargs)
-
-
-class StoriesRetrieveView(generics.RetrieveAPIView):
-    queryset = Stories.objects.all()
+class StoriesDetailView(generics.RetrieveAPIView):
+    queryset = Stories.objects.prefetch_related('images').all()
     serializer_class = StoriesSerializer
-
-    @swagger_auto_schema(
-        operation_id="stories-retrieve",
-        operation_description="retrieving the stories",
-        responses={"200": StoriesSerializer()},
-    )
-    def get(self, request, *args, **kwargs):
-        # stories = self.retrieve(request, *args, **kwargs)
-        # stories.contents.sort(lambda x: x['id'])
-
-        instance = self.get_object()
-        stories = self.get_serializer(instance)
-
-        contents = stories.data["contents"]
-        contents.sort(key=lambda x: x["id"])
-
-        return Response(stories.data)
 
 
 class AdvertisingShopView(generics.ListAPIView):

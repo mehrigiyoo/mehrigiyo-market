@@ -7,7 +7,7 @@ from modeltranslation.admin import TabbedTranslationAdmin
 
 from news.forms import NotificationAdminForm
 from shop.models import Feedbacks
-from .models import NewsModel, Stories, StoriesContent, TagsModel, Advertising, Notification
+from .models import NewsModel, Stories, TagsModel, Advertising, Notification, StoriesImage
 
 
 class HashTagFilter(AutocompleteFilter):
@@ -38,15 +38,16 @@ class TagsModelAdmin(TabbedTranslationAdmin):
     search_fields = ['id', 'tag_name', ]
 
 
+class StoriesImageInline(admin.TabularInline):
+    model = StoriesImage
+    extra = 10  # default yangi bo'sh rasm qo'shish oynasi
+    readonly_fields = ('id',)  # ID ni faqat o'qish uchun
+
+@admin.register(Stories)
 class StoriesAdmin(admin.ModelAdmin):
-    list_display = ['id', 'title', 'title_uz', 'title_ru', 'title_en', 'icon', ]
-    search_fields = ['id', 'title', 'title_uz', 'title_ru', 'title_en', ],
-    filter_horizontal = ['contents', ]
-
-
-class StoriesContentAdmin(admin.ModelAdmin):
-    list_display = ['id', 'content', 'content_uz', 'content_ru', 'content_en', 'type', ]
-    list_filter = ['id', 'type', ]
+    list_display = ('id', 'title', 'icon')
+    search_fields = ('title',)
+    inlines = [StoriesImageInline]
 
 
 class AdvertisingAdmin(admin.ModelAdmin):
@@ -65,6 +66,4 @@ class FeedbackAdmin(admin.ModelAdmin):
 admin.site.register(NewsModel, NewsModelAdmin)
 admin.site.register(TagsModel, TagsModelAdmin)
 admin.site.register(Advertising, AdvertisingAdmin)
-admin.site.register(Stories, StoriesAdmin)
-admin.site.register(StoriesContent, StoriesContentAdmin)
 admin.site.register(Feedbacks, FeedbackAdmin)

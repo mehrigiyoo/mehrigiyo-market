@@ -17,18 +17,12 @@ from django.conf import settings
 from django.conf.urls.i18n import i18n_patterns
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.http import HttpResponse
 from django.urls import path, include
 from drf_yasg import openapi
 from drf_yasg.views import get_schema_view
 from rest_framework import permissions
-from rest_framework.views import APIView
-from rest_framework_simplejwt import views as jwt_views
 
 from account.views import UnifiedLoginView
-from config.responses import ResponseSuccess
-from config.views import VersionView
-from news.send_notification import sendPush
 
 schema_view = get_schema_view(
     openapi.Info(
@@ -43,19 +37,6 @@ schema_view = get_schema_view(
 )
 
 
-class SendNotificationView(APIView):
-    # def get(self, request):
-    #     res = sendPush("Test message", "Test message from backend server", ["fRZs6mmOTqCuG5_HEp_zUu:APA91bEE9Kt-oZ9xhuHBOSpBVfiXziSpoXLyXgzk_K5mD2h_mxSLwE0L-E13XUnd5c3t8G65OKxdo8-5wMvDtLSd3wVSe9usRF6psOKZBbHhYdL4Xr_M5jkzgCkKFNFGDQS15g43nu6t"])
-    #     print(str(res))
-    #     return ResponseSuccess("ok")
-
-    def post(self, request):
-        title = request.data['title']
-        tokens = request.data['fcm_tokens']
-        description = request.data['description']
-
-        response = sendPush(title=title, description=description, registration_tokens=tokens)
-        return ResponseSuccess("Success", request=request.method)
 
 # def home(request):
 #     return HttpResponse("Welcome to Imorganic!")
@@ -76,7 +57,7 @@ urlpatterns = [
         path('payme/', include('paymeuz.urls')),
 
         # path('notifications/', ),
-        path('notification/send/', SendNotificationView.as_view()),
+        # path('notification/send/', SendNotificationView.as_view()),
 
         path('specialist/', include('specialist.urls')),
         path('chat/', include('chat.urls')),

@@ -28,34 +28,24 @@ class TagsModel(models.Model):
     #     return NewsModel.objects.filter(hashtag__tag_name=self.tag_name)
 
 
-class StoriesContent(models.Model):
-    content = models.FileField(upload_to='news/stories/')
-
-    content_uz = models.FileField(upload_to='news/stories/', blank=True)
-    content_ru = models.FileField(upload_to='news/stories/', blank=True)
-    content_en = models.FileField(upload_to='news/stories/', blank=True)
-
-    type = models.CharField(max_length=75, choices=(
-        ('photo', 'Photo'),
-        ('video', 'Video')
-    ))
-
-    def __str__(self) -> str:
-        return f"ID#{self.id}: {self.content}"
-
-
 class Stories(models.Model):
     title = models.TextField()
-
     title_uz = models.TextField(default="", blank=True)
     title_ru = models.TextField(default="", blank=True)
     title_en = models.TextField(default="", blank=True)
-
     icon = models.ImageField(upload_to="news/stories/icon", null=True)
-    contents = models.ManyToManyField(StoriesContent)
 
     def __str__(self):
         return self.title
+
+
+class StoriesImage(models.Model):
+    story = models.ForeignKey(Stories, on_delete=models.CASCADE, related_name='images')
+    image = models.FileField(upload_to=f'news/stories/{today.year}-{today.month}/')
+
+    def __str__(self) -> str:
+        return f"ID#{self.id}: {self.image}"
+
 
 
 class Advertising(models.Model):

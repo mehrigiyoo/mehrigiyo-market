@@ -1,22 +1,25 @@
+from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer, Serializer, CharField, SerializerMethodField
 
 from account.models import UserModel
 from shop.models import Feedbacks
-from .models import NewsModel, Stories, StoriesContent, TagsModel, Advertising, Notification
+from .models import NewsModel, Stories, TagsModel, Advertising, Notification, StoriesImage
 
 
-class StoriesContentSerializer(ModelSerializer):
+class StoriesImageSerializer(ModelSerializer):
     class Meta:
-        model = StoriesContent
-        fields = ('id', 'content', 'content_uz', 'content_ru', 'content_en', 'type')
+        model = StoriesImage
+        fields = ['id', 'image']
 
-
-class StoriesSerializer(ModelSerializer):
-    contents = StoriesContentSerializer(many=True)
+class StoriesSerializer(serializers.ModelSerializer):
+    images = StoriesImageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Stories
-        fields = ('id', 'title', 'title_uz', 'title_ru', 'title_en', 'icon', 'contents')
+        fields = [
+            'id', 'title', 'title_uz', 'title_ru', 'title_en',
+            'icon', 'images'
+        ]
 
 
 class AdvertisingSerializer(ModelSerializer):
