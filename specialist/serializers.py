@@ -26,7 +26,7 @@ class DoctorListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Doctor
-        fields = ('id', 'full_name', 'image', 'experience', 'type_doctor', 'review', 'top')
+        fields = ('id', 'full_name', 'image', 'experience', 'type_doctor', 'average_rating', 'rating_count', 'top')
 
 
 class DoctorDetailSerializer(serializers.ModelSerializer):
@@ -36,7 +36,7 @@ class DoctorDetailSerializer(serializers.ModelSerializer):
         model = Doctor
         fields = (
             'id', 'full_name', 'image', 'experience', 'description',
-            'type_doctor', 'review', 'view_count', 'top', 'birthday', 'gender'
+            'type_doctor', 'average_rating', 'rating_count', 'view_count', 'top', 'birthday', 'gender'
         )
 
 class DoctorProfileSerializer(serializers.ModelSerializer):
