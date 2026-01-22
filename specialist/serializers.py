@@ -69,7 +69,8 @@ class DoctorDetailSerializer(serializers.ModelSerializer):
         )
 
     def get_average_rating(self, obj):
-        return round(getattr(obj, 'calculated_average_rating', 0), 2)
+        rating = getattr(obj, 'calculated_average_rating', 0) or 0  # None bo'lsa 0 qilamiz
+        return round(rating, 2)
 
     def get_rating_count(self, obj):
         return getattr(obj, 'calculated_rating_count', 0)
