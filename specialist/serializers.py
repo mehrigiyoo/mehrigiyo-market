@@ -57,6 +57,7 @@ class DoctorListSerializer(serializers.ModelSerializer):
 class DoctorDetailSerializer(serializers.ModelSerializer):
     type_doctor = TypeDoctorSerializer(read_only=True)
     average_rating = serializers.SerializerMethodField()
+    rating_count = serializers.SerializerMethodField()  # annotate nomi bilan moslashtiramiz
     stars = serializers.SerializerMethodField()
 
     class Meta:
@@ -68,11 +69,12 @@ class DoctorDetailSerializer(serializers.ModelSerializer):
         )
 
     def get_average_rating(self, obj):
-        # Annotate dan kelgan calculated_average_rating ni olamiz
         return round(getattr(obj, 'calculated_average_rating', 0), 2)
 
+    def get_rating_count(self, obj):
+        return getattr(obj, 'calculated_rating_count', 0)
+
     def get_stars(self, obj):
-        # 5 yulduzcha logikasi
         rating = getattr(obj, 'calculated_average_rating', 0) or 0
         stars = []
         for i in range(1, 6):
@@ -83,6 +85,7 @@ class DoctorDetailSerializer(serializers.ModelSerializer):
             else:
                 stars.append(0)        # bo‘sh yulduz
         return stars
+
 
 class DoctorProfileSerializer(serializers.ModelSerializer):
     class Meta:

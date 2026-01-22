@@ -119,17 +119,15 @@ class DoctorDetailAPI(generics.RetrieveAPIView):
     lookup_field = 'id'
 
     def get_queryset(self):
-        # Annotate doctorlar bilan avg rating va rating_count hisoblab beramiz
         return Doctor.objects.filter(is_verified=True).annotate(
             calculated_average_rating=Avg('ratedoctor__rate'),
-            rating_count=Count('ratedoctor')
+            calculated_rating_count=Count('ratedoctor')
         )
 
     def retrieve(self, request, *args, **kwargs):
         doctor = self.get_object()
         user = request.user
 
-        # View count logikasi: bitta user bir marta ko'rsa oshadi
         try:
             with transaction.atomic():
                 DoctorView.objects.create(
