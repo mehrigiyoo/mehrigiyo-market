@@ -13,8 +13,6 @@ router.register(r'doctor-unavailable', DoctorUnavailableViewSet, basename='docto
 # router.register(r'types/one', GetDoctorsWithType)
 urlpatterns = [
     # path('', include(router.urls)),
-    # path('types/', TypeDoctorView.as_view({'list': 'get'})),
-    # path('types/one/', GetDoctorsWithType.as_view()),
     path('doctor/register/', DoctorRegisterView.as_view(), name='doctor-registerr'),
     path('doctor/profile/', DoctorProfileView.as_view()),
 

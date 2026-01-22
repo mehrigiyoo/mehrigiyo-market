@@ -1,5 +1,8 @@
 from django.db import models
 
+from account.models import UserModel
+
+
 class TypeDoctor(models.Model):
     name = models.CharField(max_length=100)
     image = models.ImageField(upload_to=f'types/', null=True, blank=True)
@@ -9,7 +12,6 @@ class TypeDoctor(models.Model):
 
     def get_doctors_count(self):
         return Doctor.objects.filter(type_doctor=self).count()
-
 
 # Doctor model change gender,birthday,
 class Doctor(models.Model):
@@ -40,6 +42,13 @@ class Doctor(models.Model):
     def __str__(self):
         return f"Doctor: {self.full_name}"
 
+class DoctorView(models.Model):
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
+    user = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('doctor', 'user')
 
 class DoctorVerification(models.Model):
     doctor = models.OneToOneField(

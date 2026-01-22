@@ -1,25 +1,27 @@
 import datetime
 import pytz
+from django.db import transaction, models
+from django.db.utils import IntegrityError
 from django.db.models import Count
 from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import viewsets, status
 from rest_framework.generics import RetrieveUpdateAPIView
-from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
 from rest_framework.views import APIView
 from rest_framework import generics
 
 from account.models import SmsCode
-from config.responses import ResponseSuccess, ResponseFail
+from config.responses import ResponseSuccess
 from .permissions import IsDoctor
 from .serializers import TypeDoctorSerializer, RateSerializer, AdvertisingSerializer, \
     GenderStatisticsSerializer, AdviceTimeSerializer, AvailableSlotSerializer, \
     DoctorUnavailableSerializer, WorkScheduleSerializer, DoctorProfileSerializer, \
     DoctorRegisterSerializer, DoctorListSerializer, DoctorDetailSerializer
-from .models import Doctor, TypeDoctor, Advertising, AdviceTime, DoctorUnavailable, WorkSchedule
+from .models import Doctor, TypeDoctor, Advertising, AdviceTime, DoctorUnavailable, WorkSchedule, DoctorView
 from .services import create_advice_service
 from django.contrib.auth import get_user_model
 UserModel = get_user_model()
@@ -96,6 +98,7 @@ class DoctorRegisterView(APIView):
         )
 
 
+# Doctorlar listini olish va type bo'yicha filter qilish
 class DoctorListAPI(generics.ListAPIView):
     serializer_class = DoctorListSerializer
     permission_classes = [AllowAny]
@@ -112,15 +115,29 @@ class DoctorListAPI(generics.ListAPIView):
 class DoctorDetailAPI(generics.RetrieveAPIView):
     queryset = Doctor.objects.filter(is_verified=True)
     serializer_class = DoctorDetailSerializer
-    permission_classes = [AllowAny]
-    # permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
     lookup_field = 'id'
 
     def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-        instance.view_count += 1  # Detail ko‘rilsa view_count oshadi
-        instance.save(update_fields=['view_count'])
-        serializer = self.get_serializer(instance)
+        doctor = self.get_object()
+        user = request.user
+
+        # Atomic block (race condition oldini oladi)
+        try:
+            with transaction.atomic():
+                DoctorView.objects.create(
+                    doctor=doctor,
+                    user=user
+                )
+                # faqat 1-marta kirilganda oshadi
+                Doctor.objects.filter(id=doctor.id).update(
+                    view_count=models.F('view_count') + 1
+                )
+        except IntegrityError:
+            # bu user oldin ko‘rgan — hech narsa qilmaymiz
+            pass
+
+        serializer = self.get_serializer(doctor)
         return Response(serializer.data)
 
 
