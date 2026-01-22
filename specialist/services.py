@@ -1,4 +1,4 @@
-from django.db.models import F
+from django.db.models import F, Avg, Count
 from rest_framework.exceptions import ValidationError
 import uuid
 import datetime
@@ -68,3 +68,15 @@ def create_advice_service(*, client, doctor_id, start_time, end_time):
     ChatRoom.objects.get_or_create(client=client, doktor=doctor_user, defaults={'token': uuid.uuid4()})
 
     return advice
+
+
+
+def update_doctor_rating(doctor: Doctor):
+    stats = doctor.ratings.aggregate(
+        avg=Avg('rating'),
+        count=Count('id')
+    )
+
+    doctor.average_rating = round(stats['avg'] or 0, 2)
+    doctor.rating_count = stats['count']
+    doctor.save(update_fields=['average_rating', 'rating_count'])

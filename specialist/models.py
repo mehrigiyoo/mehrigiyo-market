@@ -33,7 +33,8 @@ class Doctor(models.Model):
         choices=(('male', 'Male'), ('female', 'Female'))
     )
 
-    review = models.FloatField(default=0)
+    average_rating = models.FloatField(default=0)      # 4.6
+    rating_count = models.PositiveIntegerField(default=0)  # 128 ta baho
     view_count = models.PositiveIntegerField(default=0)
     is_verified = models.BooleanField(default=False)
 
@@ -41,6 +42,28 @@ class Doctor(models.Model):
 
     def __str__(self):
         return f"Doctor: {self.full_name}"
+
+class DoctorRating(models.Model):
+    doctor = models.ForeignKey(
+        Doctor,
+        on_delete=models.CASCADE,
+        related_name='ratings'
+    )
+    user = models.ForeignKey(
+        'account.UserModel',
+        on_delete=models.CASCADE,
+        limit_choices_to={'role': 'client'}
+    )
+
+    rating = models.PositiveSmallIntegerField(choices=[(i, i) for i in range(1, 6)])
+    comment = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('doctor', 'user')  # 1 user = 1 rating
+
 
 class DoctorView(models.Model):
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)

@@ -4,7 +4,8 @@ from rest_framework import serializers
 from account.models import UserModel
 from config.validators import normalize_phone
 from .models import Doctor, TypeDoctor, RateDoctor, Advertising, AdviceTime, WorkSchedule, DoctorUnavailable, \
-    DoctorVerification
+    DoctorVerification, DoctorRating
+from .services import update_doctor_rating
 
 
 class AdvertisingSerializer(serializers.ModelSerializer):
@@ -122,14 +123,28 @@ class DoctorRegisterSerializer(serializers.Serializer):
         return doctor
 
 
-class RateSerializer(serializers.ModelSerializer):
+class DoctorRatingSerializer(serializers.ModelSerializer):
     class Meta:
-        model = RateDoctor
-        fields = ('id', 'doctor', 'rate', 'feedback')
+        model = DoctorRating
+        fields = ('id', 'doctor', 'rating', 'comment')
 
     def create(self, validated_data):
-        validated_data['client'] = self.context['request'].user
-        return super().create(validated_data)
+        user = self.context['request'].user
+        doctor = validated_data['doctor']
+
+        rating_obj, created = DoctorRating.objects.update_or_create(
+            doctor=doctor,
+            client=user,  # Client field UserModel bo'lishi kerak
+            defaults={
+                'rating': validated_data['rating'],
+                'comment': validated_data.get('comment', '')
+            }
+        )
+
+        # Reytingni yangilash funksiyasini chaqiramiz
+        update_doctor_rating(doctor)
+
+        return rating_obj
 
 
 class WorkScheduleSerializer(serializers.ModelSerializer):

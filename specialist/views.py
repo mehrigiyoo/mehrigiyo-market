@@ -15,13 +15,12 @@ from rest_framework.views import APIView
 from rest_framework import generics
 
 from account.models import SmsCode
-from config.responses import ResponseSuccess
 from .permissions import IsDoctor
-from .serializers import TypeDoctorSerializer, RateSerializer, AdvertisingSerializer, \
+from .serializers import TypeDoctorSerializer, AdvertisingSerializer, \
     GenderStatisticsSerializer, AdviceTimeSerializer, AvailableSlotSerializer, \
     DoctorUnavailableSerializer, WorkScheduleSerializer, DoctorProfileSerializer, \
-    DoctorRegisterSerializer, DoctorListSerializer, DoctorDetailSerializer
-from .models import Doctor, TypeDoctor, Advertising, AdviceTime, DoctorUnavailable, WorkSchedule, DoctorView
+    DoctorRegisterSerializer, DoctorListSerializer, DoctorDetailSerializer, DoctorRatingSerializer
+from .models import Doctor, TypeDoctor, Advertising, AdviceTime, DoctorUnavailable, WorkSchedule, DoctorView, RateDoctor
 from .services import create_advice_service
 from django.contrib.auth import get_user_model
 UserModel = get_user_model()
@@ -141,34 +140,9 @@ class DoctorDetailAPI(generics.RetrieveAPIView):
         return Response(serializer.data)
 
 
-class GetSingleDoctor(viewsets.ModelViewSet):
-    queryset = Doctor.objects.all()
-    # permission_classes = (IsAuthenticated,)
-    serializer_class = DoctorProfileSerializer
-
-    @swagger_auto_schema(manual_parameters=[
-        openapi.Parameter('pk', openapi.IN_QUERY, description="test manual param", type=openapi.TYPE_NUMBER)
-    ])
-    def get(self, request):
-        key = request.GET.get('pk', False)
-        from django.db.models import Avg
-        queryset = self.queryset.annotate(
-            total_rate=Avg('comments_doc__rate')
-        )
-
-        if key:
-            queryset = Doctor.objects.get(id=key)
-            queryset.review = queryset.review + 1
-            queryset.save()
-        serializer = self.get_serializer(queryset, context={'user': request.user})
-
-        return ResponseSuccess(data=serializer.data, request=request.method)
-
-
-class RateView(generics.CreateAPIView):
-    serializer_class = RateSerializer
+class DoctorRatingCreateAPI(generics.CreateAPIView):
+    serializer_class = DoctorRatingSerializer
     permission_classes = [IsAuthenticated]
-
 
 
 class WorkScheduleViewSet(viewsets.ModelViewSet):

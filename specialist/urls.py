@@ -1,9 +1,10 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from .views import (TypeDoctorView, GetSingleDoctor,
+from .views import (TypeDoctorView,
                     AdvertisingView, GenderStatisticsView, AvailableSlotsView, BookAdviceView, WorkScheduleViewSet,
-                    DoctorUnavailableViewSet, DoctorProfileView, DoctorRegisterView, DoctorListAPI, DoctorDetailAPI)
+                    DoctorUnavailableViewSet, DoctorProfileView, DoctorRegisterView, DoctorListAPI, DoctorDetailAPI,
+                    DoctorRatingCreateAPI)
 router = DefaultRouter()
 router.register(r'types', TypeDoctorView)
 router.register(r'work-schedules', WorkScheduleViewSet, basename='work-schedules')
@@ -20,8 +21,8 @@ urlpatterns = [
     path('types/', TypeDoctorView.as_view()),
     path('doctors/', DoctorListAPI.as_view(), name='doctor-list'),
     path('doctors/<int:id>/', DoctorDetailAPI.as_view(), name='doctor-detail'),
+    path('doctor/rate/', DoctorRatingCreateAPI.as_view(), name='doctor-rate'),
     path('advertising/', AdvertisingView.as_view()),
-    path('doctors/one/', GetSingleDoctor.as_view({'list': 'get'})),
     # path('advice/', AdviceView.as_view()),
     path('doctor/gender/', GenderStatisticsView.as_view()),
     path('available-slots/', AvailableSlotsView.as_view(), name='available-slots'),
