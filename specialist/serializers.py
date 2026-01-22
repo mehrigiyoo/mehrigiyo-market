@@ -134,7 +134,7 @@ class DoctorRatingSerializer(serializers.ModelSerializer):
 
         rating_obj, created = DoctorRating.objects.update_or_create(
             doctor=doctor,
-            client=user,  # Client field UserModel bo'lishi kerak
+            user=user,  # Client field UserModel bo'lishi kerak
             defaults={
                 'rating': validated_data['rating'],
                 'comment': validated_data.get('comment', '')
