@@ -2,7 +2,7 @@ from admin_auto_filters.filters import AutocompleteFilter
 from django.contrib import admin
 from django import forms
 from modeltranslation.admin import TabbedTranslationAdmin
-from .models import Doctor, TypeDoctor, RateDoctor, AdviceTime, Advertising
+from .models import Doctor, TypeDoctor, RateDoctor, AdviceTime, Advertising, DoctorView
 
 
 class TypeDoctorFilter(AutocompleteFilter):
@@ -39,6 +39,16 @@ class DoctorAdminForm(forms.ModelForm):
             self.fields['phone'].initial = self.instance.user.phone
             self.fields['is_approved'].initial = self.instance.user.is_approved
 
+@admin.register(RateDoctor)
+class RateDoctorAdmin(admin.ModelAdmin):
+    list_display = ('id', 'doctor', 'user', 'rate', 'feedback', 'created_at')
+    list_filter = ('rate', 'feedback')
+    search_fields = ('doctor__full_name', 'user__username')
+
+@admin.register(DoctorView)
+class DoctorViewAdmin(admin.ModelAdmin):
+    list_display = ('id', 'doctor', 'user', 'created_at')
+
 
 @admin.register(Doctor)
 class DoctorAdmin(admin.ModelAdmin):
@@ -68,15 +78,6 @@ class DoctorAdmin(admin.ModelAdmin):
             obj.user.is_active = obj.user.is_approved
             obj.user.save()
 
-
-class RateDoctorAdmin(admin.ModelAdmin):
-    date_hierarchy = 'created_at'
-    list_display = ['id', 'client', 'doctor', 'rate', 'feedback', 'created_at', ]
-    list_filter = [ClientFilter, DoctorFilter, 'rate', ]
-    search_fields = ['id', 'feedback', ]
-    autocomplete_fields = ['client', 'doctor', ]
-
-
 class AdviceTimeAdmin(admin.ModelAdmin):
     date_hierarchy = 'start_time'
     list_display = ['id', 'doctor', 'client', 'start_time', 'end_time' ]
@@ -92,6 +93,5 @@ class AdvertisingAdmin(admin.ModelAdmin):
 
 
 admin.site.register(TypeDoctor, TypeDoctorAdmin)
-admin.site.register(RateDoctor, RateDoctorAdmin)
 admin.site.register(AdviceTime, AdviceTimeAdmin)
 admin.site.register(Advertising, AdvertisingAdmin)

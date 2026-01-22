@@ -20,23 +20,33 @@ class TypeDoctorSerializer(serializers.ModelSerializer):
         model = TypeDoctor
         fields = ['id', 'name', 'name_uz', 'name_ru', 'name_en', 'image', 'doctors_count']
 
+class RateInfoSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.full_name', read_only=True)
+
+    class Meta:
+        model = RateDoctor
+        fields = ('id', 'user_name', 'rate', 'feedback', 'created_at')
+
 
 class DoctorListSerializer(serializers.ModelSerializer):
     type_doctor = TypeDoctorSerializer(read_only=True)
+    ratings = RateInfoSerializer(many=True, read_only=True, source='ratedoctor_set')
+
 
     class Meta:
         model = Doctor
-        fields = ('id', 'full_name', 'image', 'experience', 'type_doctor', 'average_rating', 'rating_count', 'top')
+        fields = ('id', 'full_name', 'image', 'experience', 'type_doctor', 'top')
 
 
 class DoctorDetailSerializer(serializers.ModelSerializer):
     type_doctor = TypeDoctorSerializer(read_only=True)
+    ratings = RateInfoSerializer(many=True, read_only=True, source='ratedoctor_set')
 
     class Meta:
         model = Doctor
         fields = (
             'id', 'full_name', 'image', 'experience', 'description',
-            'type_doctor', 'average_rating', 'rating_count', 'view_count', 'top', 'birthday', 'gender'
+            'type_doctor', 'average_rating', 'rating_count', 'view_count', 'top', 'birthday', 'gender', 'ratings'
         )
 
 class DoctorProfileSerializer(serializers.ModelSerializer):
