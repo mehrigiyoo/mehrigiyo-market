@@ -1,7 +1,8 @@
+from django.db import IntegrityError
 from rest_framework import serializers
 
 from account.models import UserModel
-from config.validators import PhoneValidator, normalize_phone
+from config.validators import normalize_phone
 from .models import Doctor, TypeDoctor, RateDoctor, Advertising, AdviceTime, WorkSchedule, DoctorUnavailable, \
     DoctorVerification
 
@@ -55,6 +56,11 @@ class DoctorRegisterSerializer(serializers.Serializer):
         if UserModel.objects.filter(phone=phone).exists():
             raise serializers.ValidationError("Bu telefon raqam allaqachon ro‘yxatdan o‘tgan")
 
+        # type_doctor tekshirish
+        type_id = attrs.get('type_doctor')
+        if not TypeDoctor.objects.filter(id=type_id).exists():
+            raise serializers.ValidationError({"type_doctor": "Bunday doctor type mavjud emas."})
+
         attrs['phone'] = phone
         return attrs
 
@@ -74,16 +80,20 @@ class DoctorRegisterSerializer(serializers.Serializer):
         )
 
         # Doctor profile
-        doctor = Doctor.objects.create(
-            user=user,
-            full_name=validated_data['full_name'],
-            gender=validated_data['gender'],
-            birthday=validated_data.get('birthday'),
-            experience=validated_data['experience'],
-            description=validated_data.get('description', ''),
-            type_doctor_id=validated_data['type_doctor'],
-            is_verified=False
-        )
+        try:
+            doctor = Doctor.objects.create(
+                user=user,
+                full_name=validated_data['full_name'],
+                gender=validated_data['gender'],
+                birthday=validated_data.get('birthday'),
+                experience=validated_data['experience'],
+                description=validated_data.get('description', ''),
+                type_doctor_id=validated_data['type_doctor'],
+                is_verified=False
+            )
+        except IntegrityError:
+            user.delete()  # user ni ham o'chiramiz, chunki doctor bo'lmadi
+            raise serializers.ValidationError({"type_doctor": "Bunday doctor type mavjud emas."})
 
         # Verification (pending)
         DoctorVerification.objects.create(
