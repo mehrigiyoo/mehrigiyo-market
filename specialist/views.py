@@ -2,13 +2,11 @@ import datetime
 import pytz
 from django.db import transaction, models
 from django.db.utils import IntegrityError
-from django.db.models import Count
+from django.db.models import Count, Avg
 from django.utils import timezone
-from drf_yasg import openapi
-from drf_yasg.utils import swagger_auto_schema
 from rest_framework import viewsets, status
 from rest_framework.generics import RetrieveUpdateAPIView
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
 from rest_framework.views import APIView
@@ -100,10 +98,14 @@ class DoctorRegisterView(APIView):
 # Doctorlar listini olish va type bo'yicha filter qilish
 class DoctorListAPI(generics.ListAPIView):
     serializer_class = DoctorListSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
-        queryset = Doctor.objects.filter(is_verified=True).order_by('-top', '-review')
+        queryset = Doctor.objects.filter(is_verified=True).annotate(
+            average_rating=Avg('ratedoctor__rate'),  # DB darajasida o'rtacha reyting
+            rating_count=Count('ratedoctor')  # nechta reyting berilgan
+        ).order_by('-average_rating', '-top')
+
         type_id = self.request.GET.get('type', None)
         if type_id:
             queryset = queryset.filter(type_doctor_id=type_id)
@@ -112,28 +114,32 @@ class DoctorListAPI(generics.ListAPIView):
 
 # Doctor detalini olish
 class DoctorDetailAPI(generics.RetrieveAPIView):
-    queryset = Doctor.objects.filter(is_verified=True)
     serializer_class = DoctorDetailSerializer
     permission_classes = [IsAuthenticated]
     lookup_field = 'id'
+
+    def get_queryset(self):
+        # Annotate doctorlar bilan avg rating va rating_count hisoblab beramiz
+        return Doctor.objects.filter(is_verified=True).annotate(
+            calculated_average_rating=Avg('ratedoctor__rate'),
+            rating_count=Count('ratedoctor')
+        )
 
     def retrieve(self, request, *args, **kwargs):
         doctor = self.get_object()
         user = request.user
 
-        # Atomic block (race condition oldini oladi)
+        # View count logikasi: bitta user bir marta ko'rsa oshadi
         try:
             with transaction.atomic():
                 DoctorView.objects.create(
                     doctor=doctor,
                     user=user
                 )
-                # faqat 1-marta kirilganda oshadi
                 Doctor.objects.filter(id=doctor.id).update(
                     view_count=models.F('view_count') + 1
                 )
         except IntegrityError:
-            # bu user oldin ko‘rgan — hech narsa qilmaymiz
             pass
 
         serializer = self.get_serializer(doctor)

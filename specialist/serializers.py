@@ -30,22 +30,59 @@ class RateInfoSerializer(serializers.ModelSerializer):
 
 class DoctorListSerializer(serializers.ModelSerializer):
     type_doctor = TypeDoctorSerializer(read_only=True)
+    stars = serializers.SerializerMethodField()
 
     class Meta:
         model = Doctor
-        fields = ('id', 'full_name', 'image', 'experience', 'type_doctor', 'top')
+        fields = ('id', 'full_name', 'image', 'experience',
+                  'type_doctor', 'average_rating', 'rating_count', 'top', 'stars')
+
+    def get_stars(self, obj):
+        """
+        5 yulduzcha formatida reytingni tayyorlaydi
+        misol: 4.7 => [1, 1, 1, 1, 0.7] yoki float ko'rsatish
+        """
+        rating = obj.average_rating or 0
+        stars = []
+        for i in range(1, 6):
+            if rating >= i:
+                stars.append(1)  # to'liq yulduz
+            elif rating + 0.5 >= i:
+                stars.append(0.5)  # yarim yulduz
+            else:
+                stars.append(0)  # bo‘sh yulduz
+        return stars
 
 
 class DoctorDetailSerializer(serializers.ModelSerializer):
     type_doctor = TypeDoctorSerializer(read_only=True)
-    ratings = RateInfoSerializer(many=True, read_only=True, source='ratedoctor_set')
+    average_rating = serializers.SerializerMethodField()
+    stars = serializers.SerializerMethodField()
 
     class Meta:
         model = Doctor
         fields = (
             'id', 'full_name', 'image', 'experience', 'description',
-            'type_doctor', 'average_rating', 'rating_count', 'view_count', 'top', 'birthday', 'gender', 'ratings'
+            'type_doctor', 'average_rating', 'rating_count', 'view_count',
+            'top', 'birthday', 'gender', 'stars'
         )
+
+    def get_average_rating(self, obj):
+        # Annotate dan kelgan calculated_average_rating ni olamiz
+        return round(getattr(obj, 'calculated_average_rating', 0), 2)
+
+    def get_stars(self, obj):
+        # 5 yulduzcha logikasi
+        rating = getattr(obj, 'calculated_average_rating', 0) or 0
+        stars = []
+        for i in range(1, 6):
+            if rating >= i:
+                stars.append(1)        # to'liq yulduz
+            elif rating + 0.5 >= i:
+                stars.append(0.5)      # yarim yulduz
+            else:
+                stars.append(0)        # bo‘sh yulduz
+        return stars
 
 class DoctorProfileSerializer(serializers.ModelSerializer):
     class Meta:

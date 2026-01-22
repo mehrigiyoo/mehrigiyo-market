@@ -72,11 +72,10 @@ def create_advice_service(*, client, doctor_id, start_time, end_time):
 
 
 def update_doctor_rating(doctor: Doctor):
-    stats = doctor.ratings.aggregate(
-        avg=Avg('rating'),
+    stats = doctor.ratedoctor_set.aggregate(
+        avg=Avg('rate'),
         count=Count('id')
     )
-
     doctor.average_rating = round(stats['avg'] or 0, 2)
     doctor.rating_count = stats['count']
     doctor.save(update_fields=['average_rating', 'rating_count'])
