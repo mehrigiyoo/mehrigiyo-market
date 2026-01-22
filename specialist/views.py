@@ -6,7 +6,7 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import viewsets, status
 from rest_framework.generics import RetrieveUpdateAPIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
 from rest_framework.views import APIView
@@ -18,7 +18,7 @@ from .permissions import IsDoctor
 from .serializers import TypeDoctorSerializer, RateSerializer, AdvertisingSerializer, \
     GenderStatisticsSerializer, AdviceTimeSerializer, AvailableSlotSerializer, \
     DoctorUnavailableSerializer, WorkScheduleSerializer, DoctorProfileSerializer, \
-    DoctorRegisterSerializer
+    DoctorRegisterSerializer, DoctorListSerializer, DoctorDetailSerializer
 from .models import Doctor, TypeDoctor, Advertising, AdviceTime, DoctorUnavailable, WorkSchedule
 from .services import create_advice_service
 from django.contrib.auth import get_user_model
@@ -38,6 +38,7 @@ class AdvertisingView(generics.ListAPIView):
 class TypeDoctorView(generics.ListAPIView):
     queryset = TypeDoctor.objects.all()
     serializer_class = TypeDoctorSerializer
+    permission_classes = [AllowAny]
 
 
 
@@ -93,6 +94,35 @@ class DoctorRegisterView(APIView):
             },
             status=201
         )
+
+
+class DoctorListAPI(generics.ListAPIView):
+    serializer_class = DoctorListSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = Doctor.objects.filter(is_verified=True).order_by('-top', '-review')
+        type_id = self.request.GET.get('type', None)
+        if type_id:
+            queryset = queryset.filter(type_doctor_id=type_id)
+        return queryset
+
+
+# Doctor detalini olish
+class DoctorDetailAPI(generics.RetrieveAPIView):
+    queryset = Doctor.objects.filter(is_verified=True)
+    serializer_class = DoctorDetailSerializer
+    permission_classes = [AllowAny]
+    # permission_classes = [IsAuthenticatedOrReadOnly]
+    lookup_field = 'id'
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.view_count += 1  # Detail ko‘rilsa view_count oshadi
+        instance.save(update_fields=['view_count'])
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
 
 class GetSingleDoctor(viewsets.ModelViewSet):
     queryset = Doctor.objects.all()

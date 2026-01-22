@@ -20,6 +20,24 @@ class TypeDoctorSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'name_uz', 'name_ru', 'name_en', 'image', 'doctors_count']
 
 
+class DoctorListSerializer(serializers.ModelSerializer):
+    type_doctor = TypeDoctorSerializer(read_only=True)
+
+    class Meta:
+        model = Doctor
+        fields = ('id', 'full_name', 'image', 'experience', 'type_doctor', 'review', 'top')
+
+
+class DoctorDetailSerializer(serializers.ModelSerializer):
+    type_doctor = TypeDoctorSerializer(read_only=True)
+
+    class Meta:
+        model = Doctor
+        fields = (
+            'id', 'full_name', 'image', 'experience', 'description',
+            'type_doctor', 'review', 'view_count', 'top', 'birthday', 'gender'
+        )
+
 class DoctorProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Doctor
