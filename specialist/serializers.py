@@ -30,8 +30,6 @@ class RateInfoSerializer(serializers.ModelSerializer):
 
 class DoctorListSerializer(serializers.ModelSerializer):
     type_doctor = TypeDoctorSerializer(read_only=True)
-    ratings = RateInfoSerializer(many=True, read_only=True, source='ratedoctor_set')
-
 
     class Meta:
         model = Doctor
