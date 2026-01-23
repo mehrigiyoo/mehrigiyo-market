@@ -5,7 +5,7 @@ from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics
 from rest_framework.decorators import action
 from rest_framework.generics import UpdateAPIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
@@ -16,9 +16,10 @@ from config.validators import normalize_phone
 from shop.models import Medicine
 from shop.serializers import MedicineSerializer
 from .models import UserModel, CountyModel, RegionModel, DeliveryAddress, SmsCode
-from .serializers import (CheckPhoneNumberSerializer, SmsSerializer, ConfirmSmsSerializer,
+from .serializers import (SmsSerializer, ConfirmSmsSerializer,
                           RegionSerializer, CountrySerializer, UserSerializer, DeliverAddressSerializer, PkSerializer,
                           OfferSerializer, ChangePasswordSerializer, ReferalUserSerializer, UserAvatarSerializer,
+                          PhoneCheckSerializer,
                           )
 
 
@@ -63,23 +64,28 @@ class UserAvatarUpdateView(UpdateAPIView):
     def get_object(self):
         return self.request.user
 
-class CheckPhoneNumberView(APIView):
-    @swagger_auto_schema(
-        operation_id='check_phone_number',
-        operation_description="check_phone_number",
-        request_body=CheckPhoneNumberSerializer(),
-        responses={
-            '200': CheckPhoneNumberSerializer()
-        }
-    )
+class PhoneCheckAPI(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request):
-        phone_number = request.data['phone']
+        serializer = PhoneCheckSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-        users = UserModel.objects.filter(phone=phone_number)
-        if len(users) >= 1:
-            return ResponseSuccess(True, request=request.method)
+        phone = serializer.validated_data['phone']
 
-        return ResponseSuccess(False, request=request.method)
+        # Faqat client rolidagi userlarni tekshiramiz
+        exists = UserModel.objects.filter(phone=phone, role='client').exists()
+
+        if exists:
+            return Response({
+                "exists": True,
+                "message": "Client exists. Proceed to login."
+            })
+        else:
+            return Response({
+                "exists": False,
+                "message": "Client not found. Proceed to register."
+            })
 
 
 class SendSmsView(APIView):

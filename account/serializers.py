@@ -2,7 +2,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import UserModel, CountyModel, RegionModel, DeliveryAddress, OfferModel
-from config.validators import PhoneValidator
+from config.validators import PhoneValidator, normalize_phone
 
 
 class OfferSerializer(serializers.ModelSerializer):
@@ -24,8 +24,15 @@ class RegionPutSerializer(serializers.Serializer):
     region = serializers.IntegerField(required=True)
 
 
-class CheckPhoneNumberSerializer(serializers.Serializer):
-    phone = serializers.CharField()
+class PhoneCheckSerializer(serializers.Serializer):
+    phone = serializers.CharField(
+        validators=[PhoneValidator()],
+        max_length=20
+    )
+
+    def validate_phone(self, value):
+        # Telefon raqamini normalize qilamiz
+        return normalize_phone(value)
 
 
 class SmsSerializer(serializers.Serializer):
