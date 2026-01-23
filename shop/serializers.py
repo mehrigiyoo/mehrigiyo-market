@@ -25,7 +25,8 @@ class MedicineSerializer(serializers.ModelSerializer):
     instructions = serializers.SerializerMethodField()
 
     def get_rate(self, obj):
-        return obj.total_rate or 0
+        # total_rate yo‘q bo‘lsa 0 qaytaradi
+        return getattr(obj, 'total_rate', 0)
 
     def get_is_favorite(self, obj):
         user = self.context.get('user')
