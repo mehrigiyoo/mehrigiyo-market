@@ -102,13 +102,14 @@ class DoctorListAPI(generics.ListAPIView):
 
     def get_queryset(self):
         queryset = Doctor.objects.filter(is_verified=True).annotate(
-            average_rating=Avg('ratedoctor__rate'),  # DB darajasida o'rtacha reyting
-            rating_count=Count('ratedoctor')  # nechta reyting berilgan
-        ).order_by('-average_rating', '-top')
+            calculated_average_rating=Avg('ratings__rating'),
+            calculated_rating_count=Count('ratings')
+        ).order_by('-calculated_average_rating', '-top')
 
-        type_id = self.request.GET.get('type', None)
+        type_id = self.request.GET.get('type')
         if type_id:
             queryset = queryset.filter(type_doctor_id=type_id)
+
         return queryset
 
 
@@ -120,8 +121,8 @@ class DoctorDetailAPI(generics.RetrieveAPIView):
 
     def get_queryset(self):
         return Doctor.objects.filter(is_verified=True).annotate(
-            calculated_average_rating=Avg('ratedoctor__rate'),
-            calculated_rating_count=Count('ratedoctor')
+            calculated_average_rating=Avg('ratings__rating'),
+            calculated_rating_count=Count('ratings')
         )
 
     def retrieve(self, request, *args, **kwargs):

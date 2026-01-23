@@ -62,16 +62,29 @@ class DoctorRating(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('doctor', 'user')  # 1 user = 1 rating
+        constraints = [
+            models.UniqueConstraint(
+                fields=['doctor', 'user'],
+                name='unique_doctor_user_rating'
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.doctor} - {self.rating}'
 
 
 class DoctorView(models.Model):
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
-    user = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    user = models.ForeignKey('account.UserModel', on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('doctor', 'user')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['doctor', 'user'],
+                name='unique_doctor_view'
+            )
+        ]
 
 class DoctorVerification(models.Model):
     doctor = models.OneToOneField(

@@ -2,7 +2,8 @@ from admin_auto_filters.filters import AutocompleteFilter
 from django.contrib import admin
 from django import forms
 from modeltranslation.admin import TabbedTranslationAdmin
-from .models import Doctor, TypeDoctor, RateDoctor, AdviceTime, Advertising, DoctorView, DoctorVerification
+from .models import Doctor, TypeDoctor, RateDoctor, AdviceTime, Advertising, DoctorView, DoctorVerification, \
+    DoctorRating
 
 
 class TypeDoctorFilter(AutocompleteFilter):
@@ -44,6 +45,12 @@ class RateDoctorAdmin(admin.ModelAdmin):
     list_display = ('id', 'doctor', 'client', 'rate', 'feedback', 'created_at')
     list_filter = ('rate', 'feedback')
     search_fields = ('doctor__full_name', 'client__username')
+
+@admin.register(DoctorRating)
+class DoctorRatingAdmin(admin.ModelAdmin):
+    list_display = ('doctor', 'user', 'rating', 'created_at')
+    list_filter = ('rating',)
+    search_fields = ('doctor__full_name', 'user__phone')
 
 @admin.register(DoctorView)
 class DoctorViewAdmin(admin.ModelAdmin):

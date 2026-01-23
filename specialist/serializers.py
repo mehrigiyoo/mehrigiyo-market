@@ -5,7 +5,6 @@ from account.models import UserModel
 from config.validators import normalize_phone
 from .models import Doctor, TypeDoctor, RateDoctor, Advertising, AdviceTime, WorkSchedule, DoctorUnavailable, \
     DoctorVerification, DoctorRating
-from .services import update_doctor_rating
 
 
 class AdvertisingSerializer(serializers.ModelSerializer):
@@ -30,46 +29,20 @@ class RateInfoSerializer(serializers.ModelSerializer):
 
 class DoctorListSerializer(serializers.ModelSerializer):
     type_doctor = TypeDoctorSerializer(read_only=True)
-    stars = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Doctor
-        fields = ('id', 'full_name', 'image', 'experience',
-                  'type_doctor', 'average_rating', 'rating_count', 'top', 'stars')
-
-    def get_stars(self, obj):
-        """
-        5 yulduzcha formatida reytingni tayyorlaydi
-        misol: 4.7 => [1, 1, 1, 1, 0.7] yoki float ko'rsatish
-        """
-        rating = obj.average_rating or 0
-        stars = []
-        for i in range(1, 6):
-            if rating >= i:
-                stars.append(1)  # to'liq yulduz
-            elif rating + 0.5 >= i:
-                stars.append(0.5)  # yarim yulduz
-            else:
-                stars.append(0)  # bo‘sh yulduz
-        return stars
-
-
-class DoctorDetailSerializer(serializers.ModelSerializer):
-    type_doctor = TypeDoctorSerializer(read_only=True)
     average_rating = serializers.SerializerMethodField()
-    rating_count = serializers.SerializerMethodField()  # annotate nomi bilan moslashtiramiz
+    rating_count = serializers.SerializerMethodField()
     stars = serializers.SerializerMethodField()
 
     class Meta:
         model = Doctor
         fields = (
-            'id', 'full_name', 'image', 'experience', 'description',
-            'type_doctor', 'average_rating', 'rating_count', 'view_count',
-            'top', 'birthday', 'gender', 'stars'
+            'id', 'full_name', 'image', 'experience',
+            'type_doctor', 'average_rating', 'rating_count',
+            'stars', 'top'
         )
 
     def get_average_rating(self, obj):
-        rating = getattr(obj, 'calculated_average_rating', 0) or 0  # None bo'lsa 0 qilamiz
+        rating = getattr(obj, 'calculated_average_rating', 0) or 0
         return round(rating, 2)
 
     def get_rating_count(self, obj):
@@ -80,11 +53,45 @@ class DoctorDetailSerializer(serializers.ModelSerializer):
         stars = []
         for i in range(1, 6):
             if rating >= i:
-                stars.append(1)        # to'liq yulduz
+                stars.append(1)
             elif rating + 0.5 >= i:
-                stars.append(0.5)      # yarim yulduz
+                stars.append(0.5)
             else:
-                stars.append(0)        # bo‘sh yulduz
+                stars.append(0)
+        return stars
+
+
+class DoctorDetailSerializer(serializers.ModelSerializer):
+    type_doctor = TypeDoctorSerializer(read_only=True)
+    average_rating = serializers.SerializerMethodField()
+    rating_count = serializers.SerializerMethodField()
+    stars = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Doctor
+        fields = (
+            'id', 'full_name', 'image', 'experience', 'description',
+            'type_doctor', 'average_rating', 'rating_count',
+            'stars', 'view_count', 'top', 'birthday', 'gender'
+        )
+
+    def get_average_rating(self, obj):
+        rating = getattr(obj, 'calculated_average_rating', 0) or 0
+        return round(rating, 2)
+
+    def get_rating_count(self, obj):
+        return getattr(obj, 'calculated_rating_count', 0)
+
+    def get_stars(self, obj):
+        rating = getattr(obj, 'calculated_average_rating', 0) or 0
+        stars = []
+        for i in range(1, 6):
+            if rating >= i:
+                stars.append(1)
+            elif rating + 0.5 >= i:
+                stars.append(0.5)
+            else:
+                stars.append(0)
         return stars
 
 
@@ -181,20 +188,15 @@ class DoctorRatingSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         doctor = validated_data['doctor']
 
-        rating_obj, created = DoctorRating.objects.update_or_create(
+        rating_obj, _ = DoctorRating.objects.update_or_create(
             doctor=doctor,
-            user=user,  # Client field UserModel bo'lishi kerak
+            user=user,
             defaults={
                 'rating': validated_data['rating'],
                 'comment': validated_data.get('comment', '')
             }
         )
-
-        # Reytingni yangilash funksiyasini chaqiramiz
-        update_doctor_rating(doctor)
-
         return rating_obj
-
 
 class WorkScheduleSerializer(serializers.ModelSerializer):
     class Meta:
