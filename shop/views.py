@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Avg, Count, Q
+from django.db.models import Avg, Count, Q, F
 from django.shortcuts import get_object_or_404
 from drf_yasg import openapi
 from google.cloud.firestore_v1.order import Order
