@@ -1,9 +1,6 @@
 import datetime
 
 from django.db import models
-
-from specialist.models import Doctor
-
 today = datetime.date.today()
 
 class TypeMedicine(models.Model):
