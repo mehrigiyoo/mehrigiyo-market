@@ -53,7 +53,6 @@ class MedicinesView(generics.ListAPIView):
     filterset_class = ProductFilter
 
     def get_queryset(self):
-        # 1️⃣ faqat faol mahsulotlarni olish
         queryset = Medicine.objects.filter(is_active=True).select_related(
             'type_medicine'
         ).prefetch_related(
@@ -62,19 +61,16 @@ class MedicinesView(generics.ListAPIView):
             total_rate=Avg('comments_med__rate')
         ).order_by('-id')
 
-        # filterlarni qo‘llash
         filtered_qs = self.filterset_class(self.request.GET, queryset=queryset).qs
 
-        # agar type_ides parametri bo‘lsa filter qilish
+        # type_ides filter
         key = self.request.GET.get('type_ides')
         if key:
             keys = key.split(',')
             filtered_qs = filtered_qs.filter(type_medicine_id__in=keys)
 
-        # review ni increment qilish
-        for i in filtered_qs:
-            i.review = i.review + 1
-            i.save(update_fields=['review'])
+        # review ni bulk increment qilish
+        filtered_qs.update(review=F('review') + 1)
 
         return filtered_qs
 
@@ -82,6 +78,7 @@ class MedicinesView(generics.ListAPIView):
         context = super().get_serializer_context()
         context.update({'user': self.request.user})
         return context
+
 
 
 class MedicineRetrieveView(generics.RetrieveAPIView):
