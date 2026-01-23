@@ -73,6 +73,8 @@ class CartSerializer(serializers.ModelSerializer):
         model = CartModel
         fields = ('id', 'product', 'amount', 'total_price')
 
+    def get_total_price(self, obj):
+        return obj.get_total_price  # bu property CartModel da mavjud
 
 
 class CartCreateUpdateSerializer(serializers.Serializer):
