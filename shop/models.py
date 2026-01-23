@@ -24,6 +24,7 @@ class Medicine(models.Model):
     type_medicine = models.ForeignKey(TypeMedicine, on_delete=models.RESTRICT, null=True)
     cost = models.IntegerField(null=True)
     discount = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now=True, null=True)
 
     product_inn = models.CharField(max_length=255, blank=True, null=True)
@@ -100,8 +101,9 @@ class CartModel(models.Model):
     @property
     def total_price(self):
         price = self.product.cost or 0
-        discount = self.product.discount or 0
-        return (price - discount) * self.amount
+        discount_percent = self.product.discount or 0
+        discount_amount = price * discount_percent / 100
+        return (price - discount_amount) * self.amount
 
     class Meta:
         unique_together = ('user', 'product', 'status')

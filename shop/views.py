@@ -53,9 +53,8 @@ class MedicinesView(generics.ListAPIView):
     filterset_class = ProductFilter
 
     def get_queryset(self):
-        # 1️⃣ bazadan medicine va type_medicine ni bir queryda oladi
-        # 2️⃣ pictures ni prefetch qiladi, N+1 muammosini oldini oladi
-        queryset = Medicine.objects.select_related(
+        # 1️⃣ faqat faol mahsulotlarni olish
+        queryset = Medicine.objects.filter(is_active=True).select_related(
             'type_medicine'
         ).prefetch_related(
             'pictures'
@@ -89,7 +88,7 @@ class MedicineRetrieveView(generics.RetrieveAPIView):
     serializer_class = MedicineSerializer
 
     def get_queryset(self):
-        return Medicine.objects.select_related(
+        return Medicine.objects.filter(is_active=True).select_related(
             'type_medicine'
         ).prefetch_related(
             'pictures'
