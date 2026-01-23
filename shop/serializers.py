@@ -1,4 +1,6 @@
 import json
+
+from django.db.models import Avg
 from rest_framework import serializers
 from .models import Feedbacks, PicturesMedicine, TypeMedicine, Medicine, CartModel, OrderModel
 from account.serializers import DeliverAddressSerializer
@@ -25,8 +27,7 @@ class MedicineSerializer(serializers.ModelSerializer):
     instructions = serializers.SerializerMethodField()
 
     def get_rate(self, obj):
-        # total_rate yo‘q bo‘lsa 0 qaytaradi
-        return getattr(obj, 'total_rate', 0)
+        return obj.comments_med.aggregate(rate_avg=Avg('rate'))['rate_avg'] or 0
 
     def get_is_favorite(self, obj):
         user = self.context.get('user')

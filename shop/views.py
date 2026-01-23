@@ -85,12 +85,11 @@ class MedicineRetrieveView(generics.RetrieveAPIView):
     serializer_class = MedicineSerializer
 
     def get_queryset(self):
+        # annotate olib tashlaymiz
         return Medicine.objects.filter(is_active=True).select_related(
             'type_medicine'
         ).prefetch_related(
             'pictures'
-        ).annotate(
-            total_rate=Avg('comments_med__rate')
         )
 
 
