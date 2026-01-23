@@ -6,7 +6,7 @@ from .views import (TypeDoctorListAPI,
                     DoctorUnavailableViewSet, DoctorProfileView, DoctorRegisterView, DoctorListAPI, DoctorDetailAPI,
                     DoctorRatingCreateAPI)
 router = DefaultRouter()
-router.register(r'types', TypeDoctorListAPI)
+# router.register(r'types', TypeDoctorListAPI)
 router.register(r'work-schedules', WorkScheduleViewSet, basename='work-schedules')
 router.register(r'doctor-unavailable', DoctorUnavailableViewSet, basename='doctor-unavailable')
 
