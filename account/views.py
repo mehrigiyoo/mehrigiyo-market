@@ -96,7 +96,14 @@ class SendSmsView(APIView):
             purpose=purpose
         )
 
-        return ResponseSuccess(data="SMS yuborildi", request=request.method)
+        return ResponseSuccess(
+            data={
+                "message": "SMS yuborildi",
+                "purpose": purpose
+            },
+            request=request.method
+        )
+
 
 class ConfirmSmsView(APIView):
     def post(self, request):
@@ -126,10 +133,12 @@ class ConfirmSmsView(APIView):
         sms.save(update_fields=['confirmed'])
 
         return ResponseSuccess(
-            data="SMS muvaffaqiyatli tasdiqlandi",
+            data={
+                "message": "SMS muvaffaqiyatli tasdiqlandi",
+                "purpose": purpose
+            },
             request=request.method
         )
-
 
 
 class ChangePassword(APIView):
