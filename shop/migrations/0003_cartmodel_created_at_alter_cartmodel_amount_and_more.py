@@ -3,6 +3,13 @@
 from django.conf import settings
 from django.db import migrations, models
 import django.db.models.deletion
+import datetime
+
+
+def set_created_at(apps, schema_editor):
+    CartModel = apps.get_model('shop', 'CartModel')
+    # Old cart rowlar uchun created_at ni hozirgi vaqt bilan to'ldirish
+    CartModel.objects.filter(created_at__isnull=True).update(created_at=datetime.datetime.now())
 
 
 class Migration(migrations.Migration):
@@ -13,28 +20,48 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        # 1️⃣ created_at maydonini vaqtincha null=True bilan qo'shamiz
         migrations.AddField(
             model_name='cartmodel',
             name='created_at',
-            field=models.DateTimeField(auto_now_add=True, default=1),
-            preserve_default=False,
+            field=models.DateTimeField(auto_now_add=True, null=True),
         ),
+        # 2️⃣ Old rowlar uchun created_at ni set qilamiz
+        migrations.RunPython(set_created_at),
+        # 3️⃣ Null ni olib tashlaymiz, endi har bir yangi row avtomatik to‘ldiriladi
+        migrations.AlterField(
+            model_name='cartmodel',
+            name='created_at',
+            field=models.DateTimeField(auto_now_add=True),
+        ),
+
+        # 4️⃣ amount maydonini PositiveIntegerField qilib yangilash
         migrations.AlterField(
             model_name='cartmodel',
             name='amount',
             field=models.PositiveIntegerField(default=1),
         ),
+        # 5️⃣ product maydonini PROTECT bilan va related_name bilan o‘zgartirish
         migrations.AlterField(
             model_name='cartmodel',
             name='product',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='cart_items', to='shop.medicine'),
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='cart_items',
+                to='shop.medicine'
+            ),
         ),
+        # 6️⃣ user maydonini null=False qilib yangilash (production safe, default=1 olib tashlandi)
         migrations.AlterField(
             model_name='cartmodel',
             name='user',
-            field=models.ForeignKey(default=1, on_delete=django.db.models.deletion.CASCADE, related_name='carts', to=settings.AUTH_USER_MODEL),
-            preserve_default=False,
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='carts',
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
+        # 7️⃣ Unique together va index qo‘shish
         migrations.AlterUniqueTogether(
             name='cartmodel',
             unique_together={('user', 'product', 'status')},
