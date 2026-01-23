@@ -67,8 +67,7 @@ class MedicineSerializer(serializers.ModelSerializer):
 
 class CartSerializer(serializers.ModelSerializer):
     product = MedicineSerializer(read_only=True)
-    total_price = serializers.IntegerField(source='total_price', read_only=True)
-
+    total_price = serializers.SerializerMethodField()
     class Meta:
         model = CartModel
         fields = ('id', 'product', 'amount', 'total_price')
