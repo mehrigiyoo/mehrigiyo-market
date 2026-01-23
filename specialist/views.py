@@ -34,10 +34,15 @@ class AdvertisingView(generics.ListAPIView):
         return Advertising.objects.select_related('doctor')
 
 
-class TypeDoctorView(generics.ListAPIView):
-    queryset = TypeDoctor.objects.all()
+class TypeDoctorListAPI(generics.ListAPIView):
     serializer_class = TypeDoctorSerializer
     permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        # Faqat tasdiqlangan doctorlar hisoblanadi
+        return TypeDoctor.objects.annotate(
+            doctors_count=Count('doctor', filter=models.Q(doctor__is_verified=True))
+        )
 
 
 
