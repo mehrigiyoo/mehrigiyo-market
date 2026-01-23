@@ -37,8 +37,7 @@ class DoctorListSerializer(serializers.ModelSerializer):
         model = Doctor
         fields = (
             'id', 'full_name', 'image', 'experience',
-            'type_doctor', 'average_rating', 'rating_count',
-            'stars', 'top'
+            'type_doctor', 'average_rating', 'rating_count', 'top', 'stars'
         )
 
     def get_average_rating(self, obj):
@@ -72,7 +71,7 @@ class DoctorDetailSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'full_name', 'image', 'experience', 'description',
             'type_doctor', 'average_rating', 'rating_count',
-            'stars', 'view_count', 'top', 'birthday', 'gender'
+            'view_count', 'top', 'birthday', 'gender', 'stars'
         )
 
     def get_average_rating(self, obj):
@@ -93,7 +92,6 @@ class DoctorDetailSerializer(serializers.ModelSerializer):
             else:
                 stars.append(0)
         return stars
-
 
 class DoctorProfileSerializer(serializers.ModelSerializer):
     class Meta:
