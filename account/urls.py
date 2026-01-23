@@ -1,7 +1,8 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from .views import (SendSmsView, ConfirmSmsView, ChangePassword, UserAvatarUpdateView, PhoneCheckAPI)
+from .views import (SendSmsView, ConfirmSmsView, ChangePassword, UserAvatarUpdateView, PhoneCheckAPI, RegionView,
+                    CountryView)
 
 urlpatterns = [
     path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
@@ -12,8 +13,8 @@ urlpatterns = [
     path('avatar/update/', UserAvatarUpdateView.as_view()),
     # path('register/', RegistrationView.as_view()),
     # path('check/', CheckPhoneNumberView.as_view()),
-    # path('country/', CountryView.as_view()),
-    # path('region/', RegionView.as_view()),
+    path('country/', CountryView.as_view()),
+    path('region/', RegionView.as_view()),
     # path('add/address/', AddAddressView.as_view()),
     # path('me/', UserView.as_view()),
     # path('for-admin-user/', UserForAdminViewAPI.as_view()),

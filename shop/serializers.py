@@ -67,24 +67,22 @@ class MedicineSerializer(serializers.ModelSerializer):
 
 class CartSerializer(serializers.ModelSerializer):
     product = MedicineSerializer(read_only=True)
-    user = serializers.StringRelatedField(read_only=True)
+    total_price = serializers.IntegerField(source='total_price', read_only=True)
 
     class Meta:
         model = CartModel
-        fields = ('id', 'user', 'amount', 'product', 'get_total_price')
-        extra_kwargs = {
-            'user': {'required': False},
-            'amount': {'required': False},
-            'product': {'required': False}
-        }
+        fields = ('id', 'product', 'amount', 'total_price')
 
-    def create(self, validated_data):
-        request = self.context.get('request', None)
-        instance = self.Meta.model(**validated_data)
-        instance.user = request.user
-        # instance.product = request.data['product']
-        instance.save()
-        return instance
+
+
+class CartCreateUpdateSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField(required=False)
+    amount = serializers.IntegerField(min_value=1)
+
+    def validate_product_id(self, value):
+        if not Medicine.objects.filter(id=value, is_active=True).exists():
+            raise serializers.ValidationError("Product not found")
+        return value
 
 
 class CartPostSerializer(serializers.Serializer):

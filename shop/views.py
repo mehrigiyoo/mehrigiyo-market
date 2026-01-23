@@ -1,5 +1,7 @@
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Avg, Count, Q
+from django.shortcuts import get_object_or_404
 from drf_yasg import openapi
 from google.cloud.firestore_v1.order import Order
 from rest_framework.decorators import action
@@ -12,9 +14,8 @@ from .filters import ProductFilter
 from account.models import DeliveryAddress
 from config.responses import ResponseSuccess, ResponseFail
 from .serializers import (TypeMedicineSerializer, MedicineSerializer, CartSerializer, OrderCreateSerializer,
-                          OrderShowSerializer, ListSerializer, CartPostSerializer,
-                          OrderPutSerializer, CartPutSerializer, PutSerializer, OrderStatusSerializer,
-                          MedicineTypeSerializer)
+                          OrderShowSerializer, ListSerializer, OrderPutSerializer, OrderStatusSerializer,
+                          MedicineTypeSerializer, CartCreateUpdateSerializer)
 from .models import TypeMedicine, Medicine, CartModel, OrderModel
 from rest_framework import viewsets, generics
 from drf_yasg.utils import swagger_auto_schema
@@ -137,84 +138,85 @@ class GetSingleMedicine(viewsets.ModelViewSet):
 
 
 class CartView(APIView):
-    permission_classes = (IsAuthenticated,)
-    serializer_class = CartSerializer
+    permission_classes = [IsAuthenticated]
 
-    @swagger_auto_schema(
-        operation_id='get_Cart',
-        operation_description="get_Cart",
-        responses={
-            '200': CartSerializer()
-        },
-
-    )
+    # GET CART
     def get(self, request):
-        carts = CartModel.objects.filter(user=request.user, status=1)
-        serializer = CartSerializer(carts, many=True, context={'request': request, 'user': request.user})
-        return ResponseSuccess(data=serializer.data, request=request.method)
+        carts = (
+            CartModel.objects
+            .filter(user=request.user, status=CartModel.Status.ACTIVE)
+            .select_related('product')
+        )
+        return ResponseSuccess(
+            data=CartSerializer(carts, many=True).data,
+            request=request.method
+        )
 
-    @swagger_auto_schema(
-        operation_id='create_Cart',
-        operation_description="send product id and amount ",
-        request_body=CartPostSerializer(),
-        responses={
-            '200': CartSerializer()
-        },
-
-    )
+    # ADD TO CART
+    @transaction.atomic
     def post(self, request):
-        med = Medicine.objects.get(id=request.data['product'])
-        try:
-            serializer = CartModel.objects.get(user=request.user, status=1, product=med)
-            return ResponseSuccess(data='This product alredy in the cart', request=request.method)
-        except:
-            serializer = CartSerializer(data=request.data, context={'request': request,
-                                                                    'user': request.user})
+        serializer = CartCreateUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-        if serializer.is_valid():
-            cart = CartModel.objects.create(user=request.user, product=med, amount=request.data['amount'])
+        product = get_object_or_404(
+            Medicine,
+            id=serializer.validated_data['product_id'],
+            is_active=True
+        )
+        amount = serializer.validated_data['amount']
 
-            # serializer.save()
-            serializer = CartSerializer(cart)
-            return ResponseSuccess(data=serializer.data, request=request.method)
-        else:
-            return ResponseFail(data=serializer.errors, request=request.method)
+        cart, created = CartModel.objects.select_for_update().get_or_create(
+            user=request.user,
+            product=product,
+            status=CartModel.Status.ACTIVE,
+            defaults={'amount': amount}
+        )
 
-    @swagger_auto_schema(
-        operation_id='update_Cart',
-        operation_description="UpdateCart",
-        request_body=CartPutSerializer(),
-        responses={
-            '200': CartSerializer()
-        },
+        if not created:
+            cart.amount += amount
+            cart.save(update_fields=['amount'])
 
-    )
+        return ResponseSuccess(
+            data=CartSerializer(cart).data,
+            request=request.method
+        )
+
+    # UPDATE AMOUNT
+    @transaction.atomic
     def put(self, request):
-        cart = CartModel.objects.get(id=request.data['id'], user=request.user)
-        del request.data['id']
-        serializer = CartSerializer(cart, data=request.data, context={'request': request,
-                                                                      'user': request.user})
-        if serializer.is_valid():
-            serializer.save()
-            return ResponseSuccess(data=serializer.data, request=request.method)
-        else:
-            return ResponseFail(data=serializer.errors, request=request.method)
+        cart = get_object_or_404(
+            CartModel,
+            id=request.data.get('id'),
+            user=request.user,
+            status=CartModel.Status.ACTIVE
+        )
 
-    @swagger_auto_schema(
-        operation_id='delete_Cart',
-        operation_description="DeleteCart",
-        request_body=PutSerializer(),
-        responses={
-            '200': CartSerializer()
-        },
+        serializer = CartCreateUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-    )
+        cart.amount = serializer.validated_data['amount']
+        cart.save(update_fields=['amount'])
+
+        return ResponseSuccess(
+            data=CartSerializer(cart).data,
+            request=request.method
+        )
+
+    # DELETE
     def delete(self, request):
-        try:
-            CartModel.objects.get(id=request.data['id'], user=request.user).delete()
-            return ResponseSuccess(request=request.method)
-        except:
-            return ResponseFail(request=request.method)
+        cart = get_object_or_404(
+            CartModel,
+            id=request.data.get('id'),
+            user=request.user,
+            status=CartModel.Status.ACTIVE
+        )
+        cart.status = CartModel.Status.DONE
+        cart.save(update_fields=['status'])
+
+        return ResponseSuccess(
+            data="Removed from cart",
+            request=request.method
+        )
 
 
 class OrderView(APIView):

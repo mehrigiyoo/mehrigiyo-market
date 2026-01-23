@@ -1,7 +1,7 @@
 from django.urls import path, include, re_path
 from rest_framework import routers
 
-from .views import (MedicinesView, TypeMedicineView, GetMedicinesWithType, MedicineRetrieveView, CartView,
+from .views import (MedicinesView, TypeMedicineView, MedicineRetrieveView, CartView,
                     OrderView, SearchView, OrderStatusAPIView, MedicineByTypeView)
 
 router = routers.DefaultRouter()

@@ -225,7 +225,7 @@ class UserView(generics.ListAPIView, generics.UpdateAPIView):
 
 
 class RegionView(APIView):
-    permission_classes = (IsAuthenticated,)
+    # permission_classes = (IsAuthenticated,)
 
     @swagger_auto_schema(
         # request_body=DoctorSerializer(),

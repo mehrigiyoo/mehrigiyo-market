@@ -74,21 +74,41 @@ class PicturesMedicine(models.Model):
 
 
 class CartModel(models.Model):
-    TYPE = (
-        (1, 'active'),
-        (2, 'done'),
+    class Status(models.IntegerChoices):
+        ACTIVE = 1, 'active'
+        DONE = 2, 'done'
+
+    user = models.ForeignKey(
+        'account.UserModel',
+        on_delete=models.CASCADE,
+        related_name='carts'
     )
-    user = models.ForeignKey('account.UserModel', on_delete=models.SET_NULL, null=True, blank=True)
-    product = models.ForeignKey(Medicine, on_delete=models.RESTRICT)
-    amount = models.IntegerField(default=1, null=True, blank=True)
-    status = models.SmallIntegerField(default=1, choices=TYPE)
+    product = models.ForeignKey(
+        Medicine,
+        on_delete=models.PROTECT,
+        related_name='cart_items'
+    )
+    amount = models.PositiveIntegerField(default=1)
+    status = models.SmallIntegerField(
+        choices=Status.choices,
+        default=Status.ACTIVE
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
 
     @property
-    def get_total_price(self):
-        return self.product.cost * self.amount - (self.product.discount * self.amount)
+    def total_price(self):
+        price = self.product.cost or 0
+        discount = self.product.discount or 0
+        return (price - discount) * self.amount
+
+    class Meta:
+        unique_together = ('user', 'product', 'status')
+        indexes = [
+            models.Index(fields=['user', 'status']),
+        ]
 
     def __str__(self):
-        return f"{self.user}'s cart for product {self.product} {self.amount} pcs. ({self.status})"
+        return f"{self.user} | {self.product} | {self.amount}"
 
 
 PAYMENT_TYPES = (
