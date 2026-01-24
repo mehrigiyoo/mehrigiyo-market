@@ -199,17 +199,40 @@ class CartView(APIView):
 
     # DELETE
     def delete(self, request):
-        cart = get_object_or_404(
-            CartModel,
-            id=request.data.get('id'),
+        cart_id = request.data.get('id')
+        cart_ids = request.data.get('ids')
+
+        qs = CartModel.objects.filter(
             user=request.user,
             status=CartModel.Status.ACTIVE
         )
-        cart.status = CartModel.Status.DONE
-        cart.save(update_fields=['status'])
+
+        if cart_id:
+            affected = qs.filter(id=cart_id).update(
+                status=CartModel.Status.DONE
+            )
+
+        elif cart_ids:
+            affected = qs.filter(id__in=cart_ids).update(
+                status=CartModel.Status.DONE
+            )
+
+        else:
+            return Response(
+                {"detail": "id yoki ids yuborilishi shart"},
+                status=400
+            )
+
+        if affected == 0:
+            return Response(
+                {"detail": "Cart topilmadi yoki allaqachon o‘chirilgan"},
+                status=404
+            )
 
         return ResponseSuccess(
-            data="Removed from cart",
+            data={
+                "removed_count": affected
+            },
             request=request.method
         )
 
