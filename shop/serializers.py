@@ -29,7 +29,7 @@ class MedicineSerializer(serializers.ModelSerializer):
 
         fields = [
             'id', 'image', 'name', 'name_uz', 'name_ru', 'name_en', 'title', 'title_uz', 'title_ru', 'title_en',
-            'order_count','description', 'description_uz', 'description_ru', 'description_ru', 'quantity', 'review',
+            'order_count','description', 'description_uz', 'description_ru', 'description_en', 'quantity', 'review',
             'weight', 'type_medicine', 'cost', 'discount', 'total_rate', 'is_favorite', 'pictures',
         ]
 
@@ -67,7 +67,7 @@ class MedicineDetailSerializer(MedicineSerializer):
         model = Medicine
         fields = [
             'id', 'image', 'name', 'name_uz', 'name_ru', 'name_en', 'title', 'title_uz', 'title_ru', 'title_en',
-            'order_count', 'description', 'description_uz', 'description_ru', 'description_ru',
+            'order_count', 'description', 'description_uz', 'description_ru', 'description_en',
             'quantity', 'review', 'weight', 'type_medicine', 'cost', 'discount',
             'created_at', 'product_inn', 'product_ikpu', 'product_package_code',
             'content_uz', 'content_ru', 'content_en',
