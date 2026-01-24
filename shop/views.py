@@ -194,43 +194,46 @@ class CartView(APIView):
         )
 
     # DELETE
+    @transaction.atomic
     def delete(self, request):
+        """
+        - Bitta item o'chirish: id yuboriladi
+        - Savatni to'liq tozalash: hech narsa yuborilmasa avtomatik tozalash
+        """
         cart_id = request.data.get('id')
-        cart_ids = request.data.get('ids')
+        user = request.user
 
-        qs = CartModel.objects.filter(
-            user=request.user,
-            status=CartModel.Status.ACTIVE
-        )
+        qs = CartModel.objects.filter(user=user, status=CartModel.Status.ACTIVE)
 
         if cart_id:
-            affected = qs.filter(id=cart_id).update(
-                status=CartModel.Status.DONE
-            )
+            # Bitta item o'chirish
+            affected = qs.filter(id=cart_id).update(status=CartModel.Status.DONE)
 
-        elif cart_ids:
-            affected = qs.filter(id__in=cart_ids).update(
-                status=CartModel.Status.DELETED
+            if affected == 0:
+                return Response(
+                    {"detail": "Cart item topilmadi yoki allaqachon o‘chirilgan"},
+                    status=404
+                )
+
+            return ResponseSuccess(
+                data={"removed_count": affected},
+                request=request.method
             )
 
         else:
-            return Response(
-                {"detail": "id yoki ids yuborilishi shart"},
-                status=400
-            )
+            # Agar id berilmasa, savatni to'liq tozalash
+            affected = qs.update(status=CartModel.Status.DONE)
 
-        if affected == 0:
-            return Response(
-                {"detail": "Cart topilmadi yoki allaqachon o‘chirilgan"},
-                status=404
-            )
+            if affected == 0:
+                return Response(
+                    {"detail": "Savat bo‘sh yoki allaqachon tozalangan"},
+                    status=404
+                )
 
-        return ResponseSuccess(
-            data={
-                "removed_count": affected
-            },
-            request=request.method
-        )
+            return ResponseSuccess(
+                data={"removed_count": affected, "message": "Savat to‘liq bo‘shatildi"},
+                request=request.method
+            )
 
 
 # class OrderView(APIView):
