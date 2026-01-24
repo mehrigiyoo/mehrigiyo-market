@@ -150,7 +150,7 @@ class CartView(APIView):
     # ADD TO CART
     @transaction.atomic
     def post(self, request):
-        serializer = CartCreateUpdateSerializer(data=request.data, context={"request": request})
+        serializer = CartCreateUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         product = get_object_or_404(
@@ -172,7 +172,7 @@ class CartView(APIView):
             cart.save(update_fields=['amount'])
 
         return ResponseSuccess(
-            data=CartSerializer(cart).data,
+            data=CartSerializer(cart, context={"request": request}).data,
             request=request.method
         )
 
