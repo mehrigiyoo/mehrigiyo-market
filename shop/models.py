@@ -76,6 +76,7 @@ class CartModel(models.Model):
     class Status(models.IntegerChoices):
         ACTIVE = 1, 'active'
         DONE = 2, 'done'
+        DELETED = 3
 
     user = models.ForeignKey(
         'account.UserModel',

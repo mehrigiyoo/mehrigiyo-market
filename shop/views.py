@@ -214,7 +214,7 @@ class CartView(APIView):
 
         elif cart_ids:
             affected = qs.filter(id__in=cart_ids).update(
-                status=CartModel.Status.DONE
+                status=CartModel.Status.DELETED
             )
 
         else:
