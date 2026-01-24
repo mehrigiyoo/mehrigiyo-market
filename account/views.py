@@ -182,7 +182,7 @@ class ResetPasswordAPIView(APIView):
 
         sms = SmsCode.objects.filter(
             phone=phone,
-            purpose=SmsCode.Purpose.RESET_PASSWORD,
+            purpose='reset_password',
             confirmed=True,
             expire_at__gt=timezone.now()
         ).order_by('-created_at').first()
