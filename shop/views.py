@@ -207,7 +207,7 @@ class CartView(APIView):
 
         if cart_id:
             # Bitta item o'chirish
-            affected = qs.filter(id=cart_id).update(status=CartModel.Status.DONE)
+            affected = qs.filter(id=cart_id).update(status=CartModel.Status.DELETED)
 
             if affected == 0:
                 return Response(
@@ -222,7 +222,7 @@ class CartView(APIView):
 
         else:
             # Agar id berilmasa, savatni to'liq tozalash
-            affected = qs.update(status=CartModel.Status.DONE)
+            affected = qs.update(status=CartModel.Status.DELETED)
 
             if affected == 0:
                 return Response(
