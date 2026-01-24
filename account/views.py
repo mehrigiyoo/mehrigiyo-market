@@ -19,7 +19,7 @@ from .models import UserModel, CountyModel, RegionModel, SmsCode
 from .serializers import (SmsSerializer, ConfirmSmsSerializer,
                           RegionSerializer, CountrySerializer, UserSerializer, PkSerializer,
                           OfferSerializer, ChangePasswordSerializer, ReferalUserSerializer, UserAvatarSerializer,
-                          PhoneCheckSerializer,
+                          PhoneCheckSerializer, ResetPasswordSerializer,
                           )
 
 
@@ -148,47 +148,69 @@ class ConfirmSmsView(APIView):
 
 
 class ChangePassword(APIView):
-    """
-    SMS kodi tasdiqlangan user uchun password o'zgartirish
-    """
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         serializer = ChangePasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        phone = normalize_phone(serializer.validated_data['phone'])
-        new_password = serializer.validated_data['new_password']
+        user = request.user
 
-        #  SMS code tasdiqlanganmi?
+        if not user.check_password(serializer.validated_data['old_password']):
+            return Response(
+                {"detail": "Eski parol noto‘g‘ri"},
+                status=400
+            )
+
+        user.set_password(serializer.validated_data['new_password'])
+        user.save()
+
+        return Response(
+            {"detail": "Parol muvaffaqiyatli o‘zgartirildi"},
+            status=200
+        )
+
+
+class ResetPasswordAPIView(APIView):
+    permission_classes = []
+
+    def post(self, request):
+        serializer = ResetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        phone = normalize_phone(serializer.validated_data['phone'])
+
         sms = SmsCode.objects.filter(
             phone=phone,
+            purpose=SmsCode.Purpose.RESET_PASSWORD,
             confirmed=True,
             expire_at__gt=timezone.now()
         ).order_by('-created_at').first()
 
         if not sms:
             return Response(
-                {"detail": "SMS kod tasdiqlanmagan yoki eskirgan"},
+                {"detail": "SMS tasdiqlanmagan yoki eskirgan"},
                 status=400
             )
 
-        #  Userni olish
         try:
             user = UserModel.objects.get(phone=phone)
         except UserModel.DoesNotExist:
-            return Response({"detail": "Foydalanuvchi topilmadi"}, status=404)
+            return Response({"detail": "User topilmadi"}, status=404)
 
-        # Passwordni yangilash
-        user.set_password(new_password)
+        user.set_password(serializer.validated_data['new_password'])
         user.save()
 
-        # SMS code bir martalik bo‘lishi uchun
-        sms.confirmed = False
-        sms.save()
+        # one-time
+        sms.delete()
 
         return Response(
-            {"detail": "Password muvaffaqiyatli o‘zgartirildi"},
+            {"detail": "Parol tiklandi"},
             status=200
         )
+
+
+
 
 class UserView(generics.ListAPIView, generics.UpdateAPIView):
     queryset = UserModel.objects.all()

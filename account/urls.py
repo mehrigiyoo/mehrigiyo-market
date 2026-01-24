@@ -2,7 +2,7 @@ from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (SendSmsView, ConfirmSmsView, ChangePassword, UserAvatarUpdateView, PhoneCheckAPI, RegionView,
-                    CountryView)
+                    CountryView, ResetPasswordAPIView)
 
 urlpatterns = [
     path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
@@ -10,9 +10,8 @@ urlpatterns = [
     path('send/sms/', SendSmsView.as_view()),
     path('send/sms/confirm/', ConfirmSmsView.as_view()),
     path('change/password/', ChangePassword.as_view()),
+    path('reset/password/', ResetPasswordAPIView.as_view()),
     path('avatar/update/', UserAvatarUpdateView.as_view()),
-    # path('register/', RegistrationView.as_view()),
-    # path('check/', CheckPhoneNumberView.as_view()),
     path('country/', CountryView.as_view()),
     path('region/', RegionView.as_view()),
     # path('add/address/', AddAddressView.as_view()),

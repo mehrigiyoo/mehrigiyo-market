@@ -52,6 +52,17 @@ class ConfirmSmsSerializer(serializers.Serializer):
 
 
 class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True, min_length=8)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['confirm_password']:
+            raise serializers.ValidationError("Parollar mos kelmadi")
+        return attrs
+
+
+class ResetPasswordSerializer(serializers.Serializer):
     phone = serializers.CharField()
     new_password = serializers.CharField(write_only=True, min_length=8)
     confirm_password = serializers.CharField(write_only=True, min_length=8)
@@ -60,6 +71,7 @@ class ChangePasswordSerializer(serializers.Serializer):
         if attrs['new_password'] != attrs['confirm_password']:
             raise serializers.ValidationError("Parollar mos kelmadi")
         return attrs
+
 
 
 class UserAvatarSerializer(serializers.ModelSerializer):
