@@ -15,7 +15,7 @@ from account.models import DeliveryAddress
 from config.responses import ResponseSuccess, ResponseFail
 from .serializers import (TypeMedicineSerializer, MedicineSerializer, CartSerializer, OrderCreateSerializer,
                           OrderShowSerializer, ListSerializer, OrderPutSerializer, OrderStatusSerializer,
-                          MedicineTypeSerializer, CartCreateUpdateSerializer)
+                          MedicineTypeSerializer, CartCreateUpdateSerializer, MedicineDetailSerializer)
 from .models import TypeMedicine, Medicine, CartModel, OrderModel
 from rest_framework import viewsets, generics
 from drf_yasg.utils import swagger_auto_schema
@@ -82,14 +82,14 @@ class MedicinesView(generics.ListAPIView):
 
 
 class MedicineRetrieveView(generics.RetrieveAPIView):
-    serializer_class = MedicineSerializer
+    serializer_class = MedicineDetailSerializer
 
     def get_queryset(self):
-        # annotate olib tashlaymiz
-        return Medicine.objects.filter(is_active=True).select_related(
-            'type_medicine'
-        ).prefetch_related(
-            'pictures'
+        return (
+            Medicine.objects.filter(is_active=True)
+            .select_related('type_medicine')
+            .prefetch_related('pictures', 'feedbacks')
+            .annotate(total_rate=Avg('comments_med__rate'))
         )
 
 

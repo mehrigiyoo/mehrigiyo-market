@@ -21,13 +21,19 @@ class TypeMedicineSerializer(serializers.ModelSerializer):
 
 class MedicineSerializer(serializers.ModelSerializer):
     pictures = PicturesMedicineSerializer(many=True, read_only=True)
-    rate = serializers.SerializerMethodField()
     is_favorite = serializers.SerializerMethodField()
-    feedbacks = serializers.SerializerMethodField()
-    instructions = serializers.SerializerMethodField()
+    total_rate = serializers.FloatField(read_only=True)
 
-    def get_rate(self, obj):
-        return obj.comments_med.aggregate(rate_avg=Avg('rate'))['rate_avg'] or 0
+    class Meta:
+        model = Medicine
+
+        fields = [
+            'id', 'image', 'name', 'title', 'order_count',
+            'description', 'quantity', 'review', 'weight',
+            'type_medicine', 'cost', 'discount',
+            'total_rate', 'is_favorite',
+            'pictures',
+        ]
 
     def get_is_favorite(self, obj):
         user = self.context.get('user')
@@ -35,37 +41,43 @@ class MedicineSerializer(serializers.ModelSerializer):
             return False
         return user.favorite_medicine.filter(id=obj.id).exists()
 
-    def _get_feedback(self, medicine, feedback_type):
+
+
+class MedicineDetailSerializer(MedicineSerializer):
+    feedbacks = serializers.SerializerMethodField()
+    instructions = serializers.SerializerMethodField()
+
+
+    def get_feedbacks(self, obj):
         return [
             {
                 "link": f.link,
                 "image": f"https://img.youtube.com/vi/{f.link.split('/').pop()}/hqdefault.jpg"
             }
-            for f in Feedbacks.objects.filter(
-                medicine=medicine,
-                type=feedback_type
-            )
+            for f in obj.feedbacks.filter(type="feedback_product")
         ]
-
-    def get_feedbacks(self, obj):
-        return self._get_feedback(obj, "feedback_product")
 
     def get_instructions(self, obj):
-        return self._get_feedback(obj, "product_instruction")
-
-    class Meta:
-        model = Medicine
-        fields = [
-            'id', 'image', 'name', 'title', 'order_count', 'description',
-            'quantity', 'review', 'weight', 'type_medicine', 'cost', 'discount',
-            'created_at', 'product_inn', 'product_ikpu', 'product_package_code',
-            'content_uz', 'content_ru', 'content_en',
-            'features_uz', 'features_ru', 'features_en',
-            'certificates_uz', 'certificates_ru', 'certificates_en',
-            'application_uz', 'application_ru', 'application_en',
-            'contraindications_uz', 'contraindications_ru', 'contraindications_en',
-            'rate', 'is_favorite', 'feedbacks', 'instructions', 'pictures'
+        return [
+            {
+                "link": f.link,
+                "image": f"https://img.youtube.com/vi/{f.link.split('/').pop()}/hqdefault.jpg"
+            }
+            for f in obj.feedbacks.filter(type="product_instruction")
         ]
+
+    fields = [
+        'id', 'image', 'name', 'title', 'order_count', 'description',
+        'quantity', 'review', 'weight', 'type_medicine', 'cost', 'discount',
+        'created_at', 'product_inn', 'product_ikpu', 'product_package_code',
+        'content_uz', 'content_ru', 'content_en',
+        'features_uz', 'features_ru', 'features_en',
+        'certificates_uz', 'certificates_ru', 'certificates_en',
+        'application_uz', 'application_ru', 'application_en',
+        'contraindications_uz', 'contraindications_ru', 'contraindications_en',
+        'rate', 'is_favorite', 'feedbacks', 'instructions', 'pictures'
+    ]
+
 
 class CartSerializer(serializers.ModelSerializer):
     product = MedicineSerializer(read_only=True)

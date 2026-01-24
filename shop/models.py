@@ -51,10 +51,6 @@ class Medicine(models.Model):
     contraindications_ru = models.TextField(null=True)
     contraindications_en = models.TextField(null=True)
 
-    @property
-    def total_rate(self):
-        return 0  # hozircha default 0 qaytaradi
-
 
     def __str__(self):
         return self.name
