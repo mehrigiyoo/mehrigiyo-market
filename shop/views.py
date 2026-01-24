@@ -197,43 +197,44 @@ class CartView(APIView):
     @transaction.atomic
     def delete(self, request):
         """
-        - Bitta item o'chirish: id yuboriladi
-        - Savatni to'liq tozalash: hech narsa yuborilmasa avtomatik tozalash
+        - Bitta item o‘chirish: id yuboriladi
+        - Savatni to‘liq tozalash: id yuborilmasa
         """
         cart_id = request.data.get('id')
         user = request.user
 
-        qs = CartModel.objects.filter(user=user, status=CartModel.Status.ACTIVE)
+        qs = CartModel.objects.filter(user=user)
 
         if cart_id:
-            # Bitta item o'chirish
-            affected = qs.filter(id=cart_id).update(status=CartModel.Status.DELETED)
+            deleted, _ = qs.filter(id=cart_id).delete()
 
-            if affected == 0:
+            if deleted == 0:
                 return Response(
-                    {"detail": "Cart item topilmadi yoki allaqachon o‘chirilgan"},
+                    {"detail": "Cart item topilmadi"},
                     status=404
                 )
 
             return ResponseSuccess(
-                data={"removed_count": affected},
+                data={"removed_count": deleted},
                 request=request.method
             )
 
-        else:
-            # Agar id berilmasa, savatni to'liq tozalash
-            affected = qs.update(status=CartModel.Status.DELETED)
+        # CLEAR CART
+        deleted, _ = qs.delete()
 
-            if affected == 0:
-                return Response(
-                    {"detail": "Savat bo‘sh yoki allaqachon tozalangan"},
-                    status=404
-                )
-
-            return ResponseSuccess(
-                data={"removed_count": affected, "message": "Savat to‘liq bo‘shatildi"},
-                request=request.method
+        if deleted == 0:
+            return Response(
+                {"detail": "Savat bo‘sh"},
+                status=404
             )
+
+        return ResponseSuccess(
+            data={
+                "removed_count": deleted,
+                "message": "Savat to‘liq tozalandi"
+            },
+            request=request.method
+        )
 
 
 # class OrderView(APIView):
