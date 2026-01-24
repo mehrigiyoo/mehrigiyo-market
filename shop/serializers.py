@@ -28,11 +28,9 @@ class MedicineSerializer(serializers.ModelSerializer):
         model = Medicine
 
         fields = [
-            'id', 'image', 'name', 'title', 'order_count',
-            'description', 'quantity', 'review', 'weight',
-            'type_medicine', 'cost', 'discount',
-            'total_rate', 'is_favorite',
-            'pictures',
+            'id', 'image', 'name', 'name_uz' 'name_ru', 'name_en', 'title', 'title_uz', 'title_ru', 'title_en',
+            'order_count','description', 'description_uz', 'description_ru', 'description_ru', 'quantity', 'review',
+            'weight', 'type_medicine', 'cost', 'discount', 'total_rate', 'is_favorite', 'pictures',
         ]
 
     def get_is_favorite(self, obj):
@@ -68,7 +66,8 @@ class MedicineDetailSerializer(MedicineSerializer):
     class Meta:
         model = Medicine
         fields = [
-            'id', 'image', 'name', 'title', 'order_count', 'description',
+            'id', 'image', 'name', 'name_uz' 'name_ru', 'name_en', 'title', 'title_uz', 'title_ru', 'title_en',
+            'order_count', 'description', 'description_uz', 'description_ru', 'description_ru',
             'quantity', 'review', 'weight', 'type_medicine', 'cost', 'discount',
             'created_at', 'product_inn', 'product_ikpu', 'product_package_code',
             'content_uz', 'content_ru', 'content_en',
