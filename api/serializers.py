@@ -1,7 +1,6 @@
 from rest_framework import serializers
 
-from account.models import UserModel, SmsCode, SmsAttempt, CountyModel, RegionModel, DeliveryAddress
-
+from account.models import UserModel, SmsCode, SmsAttempt, CountyModel, RegionModel
 
 class UserModelAdminSerializer(serializers.ModelSerializer):
     class Meta:
@@ -33,13 +32,6 @@ class RegionModelAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = RegionModel
         fields = '__all__'
-
-
-class DeliveryAddressAdminSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DeliveryAddress
-        fields = '__all__'
-
 
 from chat.models import Message, ChatRoom
 

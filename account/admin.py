@@ -1,6 +1,6 @@
 from admin_auto_filters.filters import AutocompleteFilter
 from django.contrib import admin
-from .models import CountyModel, RegionModel, DeliveryAddress, OfferModel, Referrals, SmsCode
+from .models import CountyModel, RegionModel, OfferModel, Referrals, SmsCode
 from modeltranslation.admin import TabbedTranslationAdmin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from account.models import UserModel
@@ -61,13 +61,6 @@ class RegionAdmin(TabbedTranslationAdmin):
     autocomplete_fields = ['country']
 
 
-class DeliveryAddressAdmin(admin.ModelAdmin):
-    list_display = ['id', 'user', 'name', 'region', 'full_address', 'apartment_office', 'floor', 'door_or_phone', 'instructions']
-    list_filter = [UserFilter, RegionFilter]
-    search_fields = ['id', 'name', 'full_address', 'apartment_office', 'floor', 'door_or_phone', 'instructions']
-    autocomplete_fields = ['user', 'region']
-
-
 class OfferModelAdmin(admin.ModelAdmin):
     list_display = ['id', 'name', 'email', 'phone_number', 'offer']
     search_fields = ['id', 'name', 'email', 'phone_number', 'offer']
@@ -111,6 +104,5 @@ class SmsCodeAdmin(admin.ModelAdmin):
 
 admin.site.register(CountyModel, CountryAdmin)
 admin.site.register(RegionModel, RegionAdmin)
-admin.site.register(DeliveryAddress, DeliveryAddressAdmin)
 admin.site.register(OfferModel, OfferModelAdmin)
 admin.site.register(Referrals, ReferralModelAdmin)

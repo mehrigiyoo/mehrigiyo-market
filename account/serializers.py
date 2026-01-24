@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import UserModel, CountyModel, RegionModel, DeliveryAddress, OfferModel
+from .models import UserModel, CountyModel, RegionModel, OfferModel
 from config.validators import PhoneValidator, normalize_phone
 
 
@@ -168,25 +168,6 @@ class UserSerializer(serializers.ModelSerializer):
             'language': {'required': False},
             'theme_mode': {'required': False},
         }
-
-
-class DeliverAddressSerializer(serializers.ModelSerializer):
-    region = RegionSerializer(required=False)
-
-    class Meta:
-        model = DeliveryAddress
-        fields = ['id', 'name', 'region', 'full_address', 'apartment_office', 'floor', 'door_or_phone', 'instructions']
-        extra_kwargs = {
-            'id': {'read_only': True},
-            'name': {'required': False},
-            'region': {'required': False},
-            'full_address': {'required': False},
-            'apartment_office': {'required': False},
-            'floor': {'required': False},
-            'door_or_phone': {'required': False},
-            'instructions': {'required': False},
-        }
-
 
 
 class ReferalUserSerializer(serializers.ModelSerializer):

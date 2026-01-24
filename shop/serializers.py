@@ -3,8 +3,6 @@ import json
 from django.db.models import Avg
 from rest_framework import serializers
 from .models import Feedbacks, PicturesMedicine, TypeMedicine, Medicine, CartModel, OrderModel
-from account.serializers import DeliverAddressSerializer
-from account.models import DeliveryAddress, UserModel
 
 
 class PicturesMedicineSerializer(serializers.ModelSerializer):
@@ -130,30 +128,30 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         }
 
 
-class OrderShowSerializer(serializers.ModelSerializer):
-    shipping_address = DeliverAddressSerializer()
-    cart_products = CartSerializer(many=True)
-
-    class Meta:
-        model = OrderModel
-        fields = '__all__'
-        extra_kwargs = {
-            'delivery': {'required': False}
-        }
-
-    def update(self, instance, validated_data):
-        try:
-            id = validated_data['shipping_address']
-            da = DeliveryAddress.objects.get(id=id)
-            instance.shipping_address = da
-            instance.price = instance.price + da.region.delivery_price
-            instance.save()
-
-        except:
-            pass
-        print(instance)
-        print(validated_data)
-        instance.save()
+# class OrderShowSerializer(serializers.ModelSerializer):
+#     shipping_address = DeliverAddressSerializer()
+#     cart_products = CartSerializer(many=True)
+#
+#     class Meta:
+#         model = OrderModel
+#         fields = '__all__'
+#         extra_kwargs = {
+#             'delivery': {'required': False}
+#         }
+#
+#     def update(self, instance, validated_data):
+#         try:
+#             id = validated_data['shipping_address']
+#             da = DeliveryAddress.objects.get(id=id)
+#             instance.shipping_address = da
+#             instance.price = instance.price + da.region.delivery_price
+#             instance.save()
+#
+#         except:
+#             pass
+#         print(instance)
+#         print(validated_data)
+#         instance.save()
 
 
 class ListSerializer(serializers.Serializer):

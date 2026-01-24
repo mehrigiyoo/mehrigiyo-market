@@ -1,8 +1,7 @@
 # serializers.py
-from datetime import date
 from rest_framework import serializers
 from account.models import UserModel, Referrals
-from client.models import ClientProfile
+from client.models import ClientProfile, ClientAddress
 from paymeuz.models import PaymeTransactionModel
 
 
@@ -83,3 +82,14 @@ class ClientRegisterSerializer(serializers.Serializer):
 
 class ClientAvatarSerializer(serializers.Serializer):
     avatar = serializers.ImageField()
+
+
+class ClientAddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClientAddress
+        fields = [
+            'id', 'address_line', 'home', 'entrance', 'floor', 'apartment',
+            'add_phone', 'comment', 'latitude', 'longitude', 'is_default',
+            'is_active', 'created_at'
+        ]
+        read_only_fields = ['id', 'created_at']

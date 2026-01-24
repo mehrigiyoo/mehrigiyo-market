@@ -2,7 +2,7 @@ from django.urls import path, include, re_path
 from rest_framework import routers
 
 from .views import (MedicinesView, TypeMedicineView, MedicineRetrieveView, CartView,
-                    OrderView, SearchView, OrderStatusAPIView, MedicineByTypeView)
+                    SearchView, OrderStatusAPIView, MedicineByTypeView)
 
 router = routers.DefaultRouter()
 router.register(r'types', TypeMedicineView)
@@ -16,7 +16,7 @@ urlpatterns = [
     path('medicines/type/<int:type_medicine_id>/', MedicineByTypeView.as_view()),
     path('medicines/<int:pk>/', MedicineRetrieveView.as_view()),
     path('cart/', CartView.as_view()),
-    path('checkout/', OrderView.as_view()),
+    # path('checkout/', OrderView.as_view()),
 
     path('search/', SearchView.as_view(), name='search'),
     path('order/statistics/', OrderStatusAPIView.as_view(), name='search'),

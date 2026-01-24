@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework import routers
 from .views import (UserModelAdminViewSet, SmsCodeAdminViewSet, SmsAttemptAdminViewSet, CountyModelAdminViewSet,
-                    RegionModelAdminViewSet, DeliveryAddressAdminViewSet, MessageAdminViewSet, ChatRoomAdminViewSet,
+                    RegionModelAdminViewSet, MessageAdminViewSet, ChatRoomAdminViewSet,
                     CommentDoctorAdminViewSet, CommentMedicineAdminViewSet, NewsModelAdminViewSet,
                     PaymeTransactionModelAdminViewSet, CardAdminViewSet, PicturesMedicineAdminViewSet,
                     TypeMedicineAdminViewSet, MedicineAdminViewSet, CartModelAdminViewSet, DeliveryManAdminViewSet,

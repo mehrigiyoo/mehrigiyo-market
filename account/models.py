@@ -123,18 +123,18 @@ class RegionModel(models.Model):
         return self.name
 
 
-class DeliveryAddress(models.Model):
-    user = models.ForeignKey(UserModel, on_delete=models.RESTRICT)
-    name = models.CharField(max_length=255, null=True, blank=True)
-    region = models.ForeignKey(RegionModel, on_delete=models.RESTRICT, null=True)
-    full_address = models.CharField(max_length=255, null=True, blank=True)
-    apartment_office = models.CharField(max_length=255, null=True, blank=True)
-    floor = models.CharField(max_length=255, null=True, blank=True)
-    door_or_phone = models.CharField(max_length=255, null=True, blank=True)
-    instructions = models.CharField(max_length=255, null=True, blank=True)
-
-    def __str__(self):
-        return f"{self.user}'s delivery address: {self.region}, {self.full_address}, {self.apartment_office} {self.floor} floor, {self.door_or_phone}"
+# class DeliveryAddress(models.Model):
+#     user = models.ForeignKey(UserModel, on_delete=models.RESTRICT)
+#     name = models.CharField(max_length=255, null=True, blank=True)
+#     region = models.ForeignKey(RegionModel, on_delete=models.RESTRICT, null=True)
+#     full_address = models.CharField(max_length=255, null=True, blank=True)
+#     apartment_office = models.CharField(max_length=255, null=True, blank=True)
+#     floor = models.CharField(max_length=255, null=True, blank=True)
+#     door_or_phone = models.CharField(max_length=255, null=True, blank=True)
+#     instructions = models.CharField(max_length=255, null=True, blank=True)
+# 
+#     def __str__(self):
+#         return f"{self.user}'s delivery address: {self.region}, {self.full_address}, {self.apartment_office} {self.floor} floor, {self.door_or_phone}"
 
 
 class OfferModel(models.Model):

@@ -15,9 +15,9 @@ from config.responses import ResponseFail, ResponseSuccess
 from config.validators import normalize_phone
 from shop.models import Medicine
 from shop.serializers import MedicineSerializer
-from .models import UserModel, CountyModel, RegionModel, DeliveryAddress, SmsCode
+from .models import UserModel, CountyModel, RegionModel, SmsCode
 from .serializers import (SmsSerializer, ConfirmSmsSerializer,
-                          RegionSerializer, CountrySerializer, UserSerializer, DeliverAddressSerializer, PkSerializer,
+                          RegionSerializer, CountrySerializer, UserSerializer, PkSerializer,
                           OfferSerializer, ChangePasswordSerializer, ReferalUserSerializer, UserAvatarSerializer,
                           PhoneCheckSerializer,
                           )
@@ -260,55 +260,6 @@ class CountryView(APIView):
         return ResponseSuccess(data=serializer.data, request=request.method)
 
 
-class AddAddressView(APIView):
-    permission_classes = (IsAuthenticated,)
-
-    @swagger_auto_schema(
-        # request_body=DoctorSerializer(),
-        manual_parameters=[
-            openapi.Parameter('pk', openapi.IN_QUERY, description="Region_id",
-                              type=openapi.TYPE_NUMBER)
-        ], operation_description='')
-    @action(detail=False, methods=['post'])
-    def post(self, request):
-        key = request.GET.get('pk', False)
-        if key:
-            region = RegionModel.objects.get(id=key)
-            user = request.user
-            user.address = region
-            user.save()
-            return ResponseSuccess(request=request.method)
-        return ResponseFail(data='Bunday Viloyat mavjud emas', request=request.method)
-
-    @swagger_auto_schema(
-        request_body=RegionSerializer(),
-    )
-    @action(detail=False, methods=['put'])
-    def put(self, request):
-        reg = RegionModel.objects.get(id=request.GET['id'])
-        ser = RegionSerializer(reg, data=request.data, partial=True)
-        if ser.is_valid():
-            ser.save()
-            return ResponseSuccess(ser.data)
-        else:
-            return ResponseFail(data=ser.errors)
-
-    @swagger_auto_schema(
-        # request_body=DoctorSerializer(),
-        manual_parameters=[
-            openapi.Parameter('pk', openapi.IN_QUERY, description="Delivery address",
-                              type=openapi.TYPE_NUMBER)
-        ], operation_description='')
-    @action(detail=False, methods=['delete'])
-    def delete(self, request):
-        key = request.GET.get('pk', False)
-        if key:
-            DeliveryAddress.objects.get(id=key).delete()
-
-            return ResponseSuccess(request=request.method)
-        return ResponseFail(data='Bunday Delivery address mavjud emas', request=request.method)
-
-
 class MedicineView(generics.ListAPIView, APIView):
     permission_classes = (IsAuthenticated,)
     serializer_class = MedicineSerializer
@@ -360,90 +311,6 @@ class MedicineView(generics.ListAPIView, APIView):
         user.favorite_medicine.remove(med)
         user.save()
         return ResponseSuccess(request=request.method)
-
-
-class DeliverAddressView(generics.ListAPIView, APIView):
-    permission_classes = (IsAuthenticated,)
-    serializer_class = DeliverAddressSerializer
-
-    @swagger_auto_schema(
-        operation_id='get_delivery_address',
-        operation_description="get_delivery_address",
-        # request_body=UserSerializer(),
-        responses={
-            '200': DeliverAddressSerializer()
-        },
-    )
-    def get(self, request, *args, **kwargs):
-        self.queryset = DeliveryAddress.objects.filter(user=request.user)
-        return self.list(request, *args, **kwargs)
-
-    # def get(self, request):
-    #     address = DeliveryAddress.objects.filter(user=request.user)
-    #     serializers = DeliverAddressSerializer(address, many=True)
-    #     return ResponseSuccess(data=serializers.data, request=request.method)
-
-    @swagger_auto_schema(
-        operation_id='add_delivery_address',
-        operation_description="add_delivery_address",
-        request_body=DeliverAddressSerializer(),
-        responses={
-            '200': DeliverAddressSerializer()
-        },
-    )
-    def post(self, request):
-        region = RegionModel.objects.get(id=request.data["region"])
-        serializers = DeliverAddressSerializer(data=request.data)
-        del request.data["region"]
-        if serializers.is_valid():
-            da = DeliveryAddress(**serializers.data)
-            da.user = request.user
-            da.region = region
-            da.save()
-            serializers = DeliverAddressSerializer(da)
-            return ResponseSuccess(data=serializers.data, request=request.method)
-        else:
-            return ResponseFail(data=serializers.errors, request=request.method)
-
-    @swagger_auto_schema(
-        operation_id='update_delivery_address',
-        operation_description="update_delivery_address",
-        request_body=DeliverAddressSerializer(),
-        responses={
-            '200': DeliverAddressSerializer()
-        },
-        manual_parameters=[
-            openapi.Parameter('pk', openapi.IN_QUERY, description="Delivery address Id",
-                              type=openapi.TYPE_NUMBER)
-        ]
-    )
-    def put(self, request):
-        key = request.GET.get('pk', False)
-        add = DeliveryAddress.objects.get(id=key)
-        try:
-            region = RegionModel.objects.get(id=request.data["region"])
-            add.region = region
-        except:
-            pass
-        del request.data["region"]
-        serializers = DeliverAddressSerializer(add, data=request.data, partial=True)
-        if serializers.is_valid():
-            serializers.save()
-            return ResponseSuccess(data=serializers.data)
-        else:
-            return ResponseFail(data=serializers.errors)
-
-    @swagger_auto_schema(
-        operation_id='delete_delivery_address',
-        operation_description="delete_delivery_address",
-        request_body=PkSerializer(),
-    )
-    def delete(self, request):
-        try:
-            DeliveryAddress.objects.get(id=request.data["pk"]).delete()
-            return ResponseSuccess(data='delete!')
-        except:
-            return ResponseFail(data='delivery address not found')
 
 
 class OfferView(APIView):

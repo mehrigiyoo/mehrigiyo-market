@@ -1,3 +1,5 @@
+from django.db import transaction
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
@@ -5,7 +7,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from account.models import SmsCode
-from client.serializer import ClientRegisterSerializer, ClientProfileSerializer, ClientAvatarSerializer
+from client.models import ClientAddress
+from client.serializer import ClientRegisterSerializer, ClientProfileSerializer, ClientAvatarSerializer, \
+    ClientAddressSerializer
 from config.responses import ResponseSuccess
 from config.validators import normalize_phone
 
@@ -67,3 +71,65 @@ class ClientAvatarUpdateView(APIView):
             data={"avatar": user.avatar.url if user.avatar else None},
             request=request.method
         )
+
+
+
+class ClientAddressListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        addresses = ClientAddress.objects.filter(user=request.user, is_active=True).order_by('-is_default', '-created_at')
+        serializer = ClientAddressSerializer(addresses, many=True)
+        return ResponseSuccess(data=serializer.data, request=request.method)
+
+    @transaction.atomic
+    def post(self, request):
+        serializer = ClientAddressSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # Agar is_default True bo'lsa, eski defaultni o'chiramiz
+        if serializer.validated_data.get('is_default'):
+            ClientAddress.objects.filter(user=request.user, is_default=True).update(is_default=False)
+        serializer.save(user=request.user)
+        return ResponseSuccess(data=serializer.data, request=request.method)
+
+
+class ClientAddressDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, user):
+        return get_object_or_404(ClientAddress, pk=pk, user=user, is_active=True)
+
+    def get(self, request, pk):
+        address = self.get_object(pk, request.user)
+        serializer = ClientAddressSerializer(address)
+        return ResponseSuccess(data=serializer.data, request=request.method)
+
+    @transaction.atomic
+    def put(self, request, pk):
+        address = self.get_object(pk, request.user)
+        serializer = ClientAddressSerializer(address, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        if serializer.validated_data.get('is_default'):
+            ClientAddress.objects.filter(user=request.user, is_default=True).exclude(id=address.id).update(is_default=False)
+        serializer.save()
+        return ResponseSuccess(data=serializer.data, request=request.method)
+
+    @transaction.atomic
+    def delete(self, request, pk):
+        address = self.get_object(pk, request.user)
+        address.is_active = False  # Soft delete
+        address.save(update_fields=['is_active'])
+        return ResponseSuccess(data="Address removed", request=request.method)
+
+
+class ClientAddressBulkDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def delete(self, request):
+        ids = request.data.get('ids', [])
+        if not ids:
+            return ResponseSuccess(data="No IDs provided", request=request.method)
+        qs = ClientAddress.objects.filter(user=request.user, id__in=ids, is_active=True)
+        affected = qs.update(is_active=False)
+        return ResponseSuccess(data=f"{affected} addresses removed", request=request.method)

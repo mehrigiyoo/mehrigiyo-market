@@ -146,7 +146,7 @@ class DeliveryMan(models.Model):
 class OrderModel(models.Model):
     user = models.ForeignKey('account.UserModel', on_delete=models.RESTRICT, null=True)
     credit_card = models.ForeignKey('paymeuz.Card', on_delete=models.RESTRICT, null=True)
-    shipping_address = models.ForeignKey('account.DeliveryAddress', on_delete=models.RESTRICT, null=True, blank=True)
+    # shipping_address = models.ForeignKey('account.DeliveryAddress', on_delete=models.RESTRICT, null=True, blank=True)
     cart_products = models.ManyToManyField(CartModel)
     price = models.IntegerField(null=True)
     payment_type = models.PositiveSmallIntegerField(choices=PAYMENT_TYPES, default=2)

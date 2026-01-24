@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.db import transaction
 from django.db.models import Avg, Count, Q, F
 from django.shortcuts import get_object_or_404
@@ -8,13 +7,10 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from paymeuz.methods import send_order
-from paymeuz.models import Card
 from .filters import ProductFilter
-from account.models import DeliveryAddress
-from config.responses import ResponseSuccess, ResponseFail
-from .serializers import (TypeMedicineSerializer, MedicineSerializer, CartSerializer, OrderCreateSerializer,
-                          OrderShowSerializer, ListSerializer, OrderPutSerializer, OrderStatusSerializer,
+from config.responses import ResponseSuccess
+from .serializers import (TypeMedicineSerializer, MedicineSerializer, CartSerializer,
+                          OrderStatusSerializer,
                           MedicineTypeSerializer, CartCreateUpdateSerializer, MedicineDetailSerializer)
 from .models import TypeMedicine, Medicine, CartModel, OrderModel
 from rest_framework import viewsets, generics
@@ -237,129 +233,129 @@ class CartView(APIView):
         )
 
 
-class OrderView(APIView):
-    permission_classes = (IsAuthenticated,)
-    serializer_class = CartSerializer
-
-    @swagger_auto_schema(
-        operation_id='get_order_model',
-        operation_description="get_order_model",
-        # request_body=OrderShowSerializer(),
-        responses={
-            '200': OrderShowSerializer()
-        },
-
-    )
-    def get(self, request):
-        orders = OrderModel.objects.filter(user=request.user)
-        serializer = OrderShowSerializer(orders, many=True)
-        return ResponseSuccess(data=serializer.data, request=request.method)
-
-    @swagger_auto_schema(
-        operation_id='create_cart_model',
-        operation_description="To create cart model",
-        request_body=ListSerializer(),
-        responses={
-            '200': OrderShowSerializer()
-        },
-
-    )
-    def post(self, request):
-        ides = request.data['list'].split(',')
-        carts = CartModel.objects.filter(user=request.user, status=1, id__in=ides)
-        order = OrderModel()
-        order.user = request.user
-        order.save()
-        summa = 0
-        for i in carts:
-            order.cart_products.add(i)
-            summa += i.get_total_price
-            # i.status = 2
-            # i.save()
-        order.price = summa
-        order.save()
-        serializer = OrderShowSerializer(order)
-        return ResponseSuccess(data=serializer.data, request=request.method)
-
-    @swagger_auto_schema(
-        operation_id='create_order_model',
-        operation_description="To add shipping address to order",
-        request_body=OrderPutSerializer(),
-        responses={
-            '200': OrderShowSerializer()
-        },
-
-    )
-    def put(self, request):
-        credit_card = request.data['credit_card']
-        cart = CartModel.objects.filter(user=request.user, status=1)
-        card = None
-
-        try:
-            order = OrderModel.objects.get(id=request.data['id'])
-        except:
-            return ResponseFail(data='Order not found')
-
-        try:
-            id = request.data['shipping_address']
-            da = DeliveryAddress.objects.get(id=id)
-            add_key = 1
-        except:
-            add_key = 0
-
-        if add_key == 1:
-            order.shipping_address = da
-
-        if credit_card is not None:
-            try:
-                card = Card.objects.get(id=request.data['credit_card'])
-                # print(card, '<---------------------------------')
-                order.credit_card = card
-                order.payment_type = 2
-            except:
-                return ResponseFail(data='Credit Card Not found')
-        else:
-            order.payment_type = 1
-            order.payment_status = 3
-            order.save()
-
-            send_order(order.id)
-
-            for product in cart:
-                product.status = 2
-                product.save()
-
-        try:
-            del request.data['id']
-            serializer = OrderCreateSerializer(order, data=request.data)
-            if serializer.is_valid():
-                if add_key == 1:
-                    if order.shipping_address is None:
-                        if da.region.delivery_price == 0:
-                            order.price = order.price + settings.DEFAULT_DELIVERY_COST
-                        else:
-                            order.price = order.price + da.region.delivery_price
-                    else:
-                        old_price = order.shipping_address.region.delivery_price
-
-                        if old_price == 0:
-                            order.price = order.price - settings.DEFAULT_DELIVERY_COST
-                        else:
-                            order.price = order.price - old_price
-
-                        if da.region.delivery_price == 0:
-                            order.price = order.price + settings.DEFAULT_DELIVERY_COST
-                        else:
-                            order.price = order.price + da.region.delivery_price
-
-                order.save()
-                serializer.save()
-                serializer = OrderShowSerializer(order)
-                return ResponseSuccess(data=serializer.data, request=request.method)
-            else:
-                return ResponseFail(data=serializer.errors, request=request.method)
-        except Exception as e:
-            print(f'\n\nexception : {e}\n\n')
+# class OrderView(APIView):
+#     permission_classes = (IsAuthenticated,)
+#     serializer_class = CartSerializer
+#
+#     @swagger_auto_schema(
+#         operation_id='get_order_model',
+#         operation_description="get_order_model",
+#         # request_body=OrderShowSerializer(),
+#         responses={
+#             '200': OrderShowSerializer()
+#         },
+#
+#     )
+#     def get(self, request):
+#         orders = OrderModel.objects.filter(user=request.user)
+#         serializer = OrderShowSerializer(orders, many=True)
+#         return ResponseSuccess(data=serializer.data, request=request.method)
+#
+#     @swagger_auto_schema(
+#         operation_id='create_cart_model',
+#         operation_description="To create cart model",
+#         request_body=ListSerializer(),
+#         responses={
+#             '200': OrderShowSerializer()
+#         },
+#
+#     )
+#     def post(self, request):
+#         ides = request.data['list'].split(',')
+#         carts = CartModel.objects.filter(user=request.user, status=1, id__in=ides)
+#         order = OrderModel()
+#         order.user = request.user
+#         order.save()
+#         summa = 0
+#         for i in carts:
+#             order.cart_products.add(i)
+#             summa += i.get_total_price
+#             # i.status = 2
+#             # i.save()
+#         order.price = summa
+#         order.save()
+#         serializer = OrderShowSerializer(order)
+#         return ResponseSuccess(data=serializer.data, request=request.method)
+#
+#     @swagger_auto_schema(
+#         operation_id='create_order_model',
+#         operation_description="To add shipping address to order",
+#         request_body=OrderPutSerializer(),
+#         responses={
+#             '200': OrderShowSerializer()
+#         },
+#
+#     )
+#     def put(self, request):
+#         credit_card = request.data['credit_card']
+#         cart = CartModel.objects.filter(user=request.user, status=1)
+#         card = None
+#
+#         try:
+#             order = OrderModel.objects.get(id=request.data['id'])
+#         except:
+#             return ResponseFail(data='Order not found')
+#
+#         try:
+#             id = request.data['shipping_address']
+#             da = DeliveryAddress.objects.get(id=id)
+#             add_key = 1
+#         except:
+#             add_key = 0
+#
+#         if add_key == 1:
+#             order.shipping_address = da
+#
+#         if credit_card is not None:
+#             try:
+#                 card = Card.objects.get(id=request.data['credit_card'])
+#                 # print(card, '<---------------------------------')
+#                 order.credit_card = card
+#                 order.payment_type = 2
+#             except:
+#                 return ResponseFail(data='Credit Card Not found')
+#         else:
+#             order.payment_type = 1
+#             order.payment_status = 3
+#             order.save()
+#
+#             send_order(order.id)
+#
+#             for product in cart:
+#                 product.status = 2
+#                 product.save()
+#
+#         try:
+#             del request.data['id']
+#             serializer = OrderCreateSerializer(order, data=request.data)
+#             if serializer.is_valid():
+#                 if add_key == 1:
+#                     if order.shipping_address is None:
+#                         if da.region.delivery_price == 0:
+#                             order.price = order.price + settings.DEFAULT_DELIVERY_COST
+#                         else:
+#                             order.price = order.price + da.region.delivery_price
+#                     else:
+#                         old_price = order.shipping_address.region.delivery_price
+#
+#                         if old_price == 0:
+#                             order.price = order.price - settings.DEFAULT_DELIVERY_COST
+#                         else:
+#                             order.price = order.price - old_price
+#
+#                         if da.region.delivery_price == 0:
+#                             order.price = order.price + settings.DEFAULT_DELIVERY_COST
+#                         else:
+#                             order.price = order.price + da.region.delivery_price
+#
+#                 order.save()
+#                 serializer.save()
+#                 serializer = OrderShowSerializer(order)
+#                 return ResponseSuccess(data=serializer.data, request=request.method)
+#             else:
+#                 return ResponseFail(data=serializer.errors, request=request.method)
+#         except Exception as e:
+#             print(f'\n\nexception : {e}\n\n')
 
 
 class SearchView(APIView):

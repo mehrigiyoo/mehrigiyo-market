@@ -2,6 +2,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 
+from news.send_notification import sendPush
 from .serializers import *
 
 from rest_framework import viewsets, status
@@ -39,12 +40,6 @@ class CountyModelAdminViewSet(viewsets.ModelViewSet):
 class RegionModelAdminViewSet(viewsets.ModelViewSet):
     queryset = RegionModel.objects.all()
     serializer_class = RegionModelAdminSerializer
-    permission_classes = [IsAuthenticated, ]
-
-
-class DeliveryAddressAdminViewSet(viewsets.ModelViewSet):
-    queryset = DeliveryAddress.objects.all()
-    serializer_class = DeliveryAddressAdminSerializer
     permission_classes = [IsAuthenticated, ]
 
 

@@ -76,12 +76,12 @@ admin.site.register(DeliveryMan, DeliveryManAdmin)
 
 class OrderModelAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
-    list_display = ['id', 'user', 'credit_card', 'shipping_address', 'price', 'payment_type', 'payment_status',
+    list_display = ['id', 'user', 'credit_card', 'price', 'payment_type', 'payment_status',
                     'delivery_status', 'delivery', 'created_at', ]
     list_filter = [UserFilter, CreditCardFilter, ShippingAddressFilter, 'payment_type', 'payment_status',
                    'delivery_status', DeliveryFilter, ]
     search_fields = ['id', 'price', ]
-    autocomplete_fields = ['user', 'credit_card', 'shipping_address', 'delivery', ]
+    autocomplete_fields = ['user', 'credit_card', 'delivery', ]
     filter_horizontal = ['cart_products', ]
 
 
