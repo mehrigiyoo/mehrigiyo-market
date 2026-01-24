@@ -65,18 +65,19 @@ class MedicineDetailSerializer(MedicineSerializer):
             }
             for f in obj.feedbacks.filter(type="product_instruction")
         ]
-
-    fields = [
-        'id', 'image', 'name', 'title', 'order_count', 'description',
-        'quantity', 'review', 'weight', 'type_medicine', 'cost', 'discount',
-        'created_at', 'product_inn', 'product_ikpu', 'product_package_code',
-        'content_uz', 'content_ru', 'content_en',
-        'features_uz', 'features_ru', 'features_en',
-        'certificates_uz', 'certificates_ru', 'certificates_en',
-        'application_uz', 'application_ru', 'application_en',
-        'contraindications_uz', 'contraindications_ru', 'contraindications_en',
-        'rate', 'is_favorite', 'feedbacks', 'instructions', 'pictures'
-    ]
+    class Meta:
+        model = Medicine
+        fields = [
+            'id', 'image', 'name', 'title', 'order_count', 'description',
+            'quantity', 'review', 'weight', 'type_medicine', 'cost', 'discount',
+            'created_at', 'product_inn', 'product_ikpu', 'product_package_code',
+            'content_uz', 'content_ru', 'content_en',
+            'features_uz', 'features_ru', 'features_en',
+            'certificates_uz', 'certificates_ru', 'certificates_en',
+            'application_uz', 'application_ru', 'application_en',
+            'contraindications_uz', 'contraindications_ru', 'contraindications_en',
+            'is_favorite', 'feedbacks', 'instructions', 'pictures'
+        ]
 
 
 class CartSerializer(serializers.ModelSerializer):
