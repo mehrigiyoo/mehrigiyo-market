@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import ClientRegisterView, ClientProfileView, ClientAvatarUpdateView, ClientAddressListCreateView, \
+from .views import ClientRegisterView, ClientProfileView, ClientAddressListCreateView, \
     ClientAddressDetailView, ClientAddressBulkDeleteView, MedicineLikeToggleAPIView, FavoriteMedicineListAPIView
 
 urlpatterns = [
@@ -8,8 +8,8 @@ urlpatterns = [
     path('addresses/', ClientAddressListCreateView.as_view(), name='client-address-list-create'),
     path('addresses/<int:pk>/', ClientAddressDetailView.as_view(), name='client-address-detail'),
     path('addresses/bulk-delete/', ClientAddressBulkDeleteView.as_view(), name='client-address-bulk-delete'),
-    path('medicine/like/', MedicineLikeToggleAPIView.as_view(), name='client-address-bulk-delete'),
-    path('medicine/like/list/', FavoriteMedicineListAPIView.as_view(), name='client-address-bulk-delete'),
+    path('medicines/<int:pk>/like/', MedicineLikeToggleAPIView.as_view(), name='medicine-like-toggle'),
+    path('medicines/favorites/', FavoriteMedicineListAPIView.as_view(), name='medicine-favorite-list'),
 
 
     # path('profile/avatar/update', ClientAvatarUpdateView.as_view()),
