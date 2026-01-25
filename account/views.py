@@ -282,59 +282,6 @@ class CountryView(APIView):
         return ResponseSuccess(data=serializer.data, request=request.method)
 
 
-class MedicineView(generics.ListAPIView, APIView):
-    permission_classes = (IsAuthenticated,)
-    serializer_class = MedicineSerializer
-
-    @swagger_auto_schema(
-        operation_id='get_favorite_medicines',
-        operation_description="get_favorite_medicines",
-        # request_body=UserSerializer(),
-        responses={
-            '200': MedicineSerializer()
-        },
-    )
-    def get(self, request, *args, **kwargs):
-        self.queryset = request.user.favorite_medicine.all()
-        return self.list(request, *args, **kwargs)
-
-    @swagger_auto_schema(
-        operation_id='add_favorite_medicines',
-        operation_description="add_favorite_medicines",
-        request_body=PkSerializer(),
-        responses={
-            '200': MedicineSerializer()
-        },
-    )
-    def post(self, request):
-        try:
-            med = Medicine.objects.get(id=request.data['pk'])
-        except:
-            return ResponseFail(data='Bunday dori mavjud emas', request=request.method)
-        user = request.user
-        user.favorite_medicine.add(med)
-        user.save()
-        return ResponseSuccess(request=request.method)
-
-    @swagger_auto_schema(
-        operation_id='remove_favorite_medicines',
-        operation_description="remove_favorite_medicines",
-        request_body=PkSerializer(),
-        # responses={
-        #     '200': MedicineSerializer()
-        # },
-    )
-    def delete(self, request):
-        try:
-            med = Medicine.objects.get(id=request.data['pk'])
-        except:
-            return ResponseFail(data='Bunday dori mavjud emas', request=request.method)
-        user = request.user
-        user.favorite_medicine.remove(med)
-        user.save()
-        return ResponseSuccess(request=request.method)
-
-
 class OfferView(APIView):
     @swagger_auto_schema(
         operation_id='create_offer',

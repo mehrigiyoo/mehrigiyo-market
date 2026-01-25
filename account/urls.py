@@ -18,7 +18,6 @@ urlpatterns = [
     # path('me/', UserView.as_view()),
     # path('for-admin-user/', UserForAdminViewAPI.as_view()),
     # path('for-admin-referal-user/', ReferalUserForAdminViewAPI.as_view()),
-    # path('favorite/medicines/', MedicineView.as_view()),
     # path('deliver/address/', DeliverAddressView.as_view()),
     # path('offer/', OfferView.as_view()),
     # path('set/registrationkey/', SetRegistrationKeyView.as_view()),

@@ -1,4 +1,5 @@
-from django.db import transaction
+from django.db import transaction, models
+from django.db.models import OuterRef, Exists, Count, BooleanField, Value, Avg
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics
@@ -7,11 +8,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from account.models import SmsCode
-from client.models import ClientAddress
+from client.models import ClientAddress, MedicineLike
 from client.serializer import ClientRegisterSerializer, ClientProfileSerializer, ClientAvatarSerializer, \
     ClientAddressSerializer
 from config.responses import ResponseSuccess
 from config.validators import normalize_phone
+from shop.models import Medicine
+from shop.serializers import MedicineSerializer
 
 
 # views.py
@@ -133,3 +136,71 @@ class ClientAddressBulkDeleteView(APIView):
         qs = ClientAddress.objects.filter(user=request.user, id__in=ids, is_active=True)
         affected = qs.update(is_active=False)
         return ResponseSuccess(data=f"{affected} addresses removed", request=request.method)
+
+
+
+
+def get_queryset(self):
+    user = self.request.user
+
+    qs = Medicine.objects.filter(is_active=True).annotate(
+        likes_count=Count('likes', distinct=True)
+    )
+
+    if user.is_authenticated:
+        qs = qs.annotate(
+            is_favorite=Exists(
+                MedicineLike.objects.filter(
+                    user=user,
+                    medicine=OuterRef('pk')
+                )
+            )
+        )
+    else:
+        qs = qs.annotate(is_favorite=models.Value(False))
+
+    return qs
+
+
+class MedicineLikeToggleAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        medicine = get_object_or_404(Medicine, pk=pk, is_active=True)
+
+        like, created = MedicineLike.objects.get_or_create(
+            user=request.user,
+            medicine=medicine
+        )
+
+        if not created:
+            like.delete()
+            return ResponseSuccess(
+                data={"liked": False},
+                request=request.method
+            )
+
+        return ResponseSuccess(
+            data={"liked": True},
+            request=request.method
+        )
+
+
+class FavoriteMedicineListAPIView(generics.ListAPIView):
+    serializer_class = MedicineSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+
+        return (
+            Medicine.objects
+            .filter(likes__user=user, is_active=True)
+            .annotate(
+                total_rate=Avg('comments_med__rate'),
+                likes_count=Count('likes', distinct=True),
+                is_favorite=Value(True, output_field=BooleanField())
+            )
+            .select_related('type_medicine')
+            .prefetch_related('pictures')
+        )

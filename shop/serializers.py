@@ -19,7 +19,8 @@ class TypeMedicineSerializer(serializers.ModelSerializer):
 
 class MedicineSerializer(serializers.ModelSerializer):
     pictures = PicturesMedicineSerializer(many=True, read_only=True)
-    is_favorite = serializers.SerializerMethodField()
+    is_favorite = serializers.BooleanField(read_only=True)
+    # likes_count = serializers.IntegerField(read_only=True)
     total_rate = serializers.FloatField(read_only=True)
 
     class Meta:

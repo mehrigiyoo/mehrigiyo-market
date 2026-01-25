@@ -1,6 +1,7 @@
 from django.db import models
 
 from account.models import UserModel
+from shop.models import Medicine
 
 
 # account/models.py
@@ -43,3 +44,28 @@ class ClientAddress(models.Model):
     is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+
+class MedicineLike(models.Model):
+    user = models.ForeignKey(
+        UserModel,
+        on_delete=models.CASCADE,
+        related_name='medicine_likes'
+    )
+    medicine = models.ForeignKey(
+        Medicine,
+        on_delete=models.CASCADE,
+        related_name='likes'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'medicine')
+        indexes = [
+            models.Index(fields=['user']),
+            models.Index(fields=['medicine']),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id}  {self.medicine_id}"
