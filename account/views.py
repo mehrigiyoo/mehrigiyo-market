@@ -2,7 +2,7 @@ from django.contrib.auth import authenticate
 from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.decorators import action
 from rest_framework.generics import UpdateAPIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -19,7 +19,7 @@ from .models import UserModel, CountyModel, RegionModel, SmsCode
 from .serializers import (SmsSerializer, ConfirmSmsSerializer,
                           RegionSerializer, CountrySerializer, UserSerializer, PkSerializer,
                           OfferSerializer, ChangePasswordSerializer, ReferalUserSerializer, UserAvatarSerializer,
-                          PhoneCheckSerializer, ResetPasswordSerializer,
+                          PhoneCheckSerializer, ResetPasswordSerializer, LogoutSerializer, DeleteAccountSerializer,
                           )
 
 
@@ -210,40 +210,63 @@ class ResetPasswordAPIView(APIView):
         )
 
 
+class LogoutAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            token = RefreshToken(serializer.validated_data['refresh'])
+            token.blacklist()
+        except Exception:
+            return Response(
+                {"detail": "Invalid token"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        return Response(
+            {"detail": "Logout successful"},
+            status=status.HTTP_205_RESET_CONTENT
+        )
 
 
-class UserView(generics.ListAPIView, generics.UpdateAPIView):
-    queryset = UserModel.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = (IsAuthenticated,)
 
-    @swagger_auto_schema(
-        operation_id='get_user',
-        operation_description="my data",
-        # request_body=RegistrationSerializer(),
-        responses={
-            '200': UserSerializer()
-        },
-    )
-    def get(self, request, *args, **kwargs):
-        self.queryset = UserModel.objects.filter(id=request.user.id)
-        return self.list(request, *args, **kwargs)
+class DeleteAccountAPIView(APIView):
+    permission_classes = [IsAuthenticated]
 
-    @swagger_auto_schema(
-        operation_id='update_user',
-        operation_description="update my data",
-        request_body=UserSerializer(),
-        responses={
-            '200': UserSerializer()
-        },
-    )
-    def put(self, request):
-        serializer = UserSerializer(request.user, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return ResponseSuccess(data=serializer.data, request=request.method)
-        else:
-            return ResponseFail(data=serializer.errors, request=request.method)
+    def post(self, request):
+        serializer = DeleteAccountSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = request.user
+        password = serializer.validated_data['password']
+
+        if not user.check_password(password):
+            return Response(
+                {"detail": "Password noto‘g‘ri"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Soft delete (senior approach)
+        user.is_active = False
+        user.deleted_at = timezone.now()  # agar field bo‘lsa
+        user.save(update_fields=["is_active", "deleted_at"])
+
+        # Tokenlarni ham o‘ldiramiz
+        from rest_framework_simplejwt.tokens import OutstandingToken, BlacklistedToken
+
+        tokens = OutstandingToken.objects.filter(user=user)
+        for token in tokens:
+            BlacklistedToken.objects.get_or_create(token=token)
+
+        return Response(
+            {"detail": "Account muvaffaqiyatli o‘chirildi"},
+            status=status.HTTP_200_OK
+        )
+
+
 
 
 class RegionView(APIView):

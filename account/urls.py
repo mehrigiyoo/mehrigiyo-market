@@ -2,10 +2,12 @@ from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (SendSmsView, ConfirmSmsView, ChangePassword, UserAvatarUpdateView, PhoneCheckAPI, RegionView,
-                    CountryView, ResetPasswordAPIView)
+                    CountryView, ResetPasswordAPIView, LogoutAPIView, DeleteAccountAPIView)
 
 urlpatterns = [
     path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('profile/logout/', LogoutAPIView.as_view(), name='auth-logout'),
+    path('profile/delete/', DeleteAccountAPIView.as_view(), name='account-delete'),
     path('phone-check/', PhoneCheckAPI.as_view(), name='phone-check'),
     path('send/sms/', SendSmsView.as_view()),
     path('send/sms/confirm/', ConfirmSmsView.as_view()),
@@ -15,7 +17,6 @@ urlpatterns = [
     path('country/', CountryView.as_view()),
     path('region/', RegionView.as_view()),
     # path('add/address/', AddAddressView.as_view()),
-    # path('me/', UserView.as_view()),
     # path('for-admin-user/', UserForAdminViewAPI.as_view()),
     # path('for-admin-referal-user/', ReferalUserForAdminViewAPI.as_view()),
     # path('deliver/address/', DeliverAddressView.as_view()),

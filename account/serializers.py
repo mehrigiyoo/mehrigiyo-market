@@ -1,9 +1,14 @@
 from rest_framework import serializers
-from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import UserModel, CountyModel, RegionModel, OfferModel
 from config.validators import PhoneValidator, normalize_phone
 
+
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+
+class DeleteAccountSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True)
 
 class OfferSerializer(serializers.ModelSerializer):
     class Meta:
