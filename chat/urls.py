@@ -1,6 +1,11 @@
-from django.urls import path
-from .views import UploadMessageAttachment
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import ChatRoomViewSet, MessageViewSet
+
+router = DefaultRouter()
+router.register(r'rooms', ChatRoomViewSet, basename='chatroom')
+router.register(r'messages', MessageViewSet, basename='message')
 
 urlpatterns = [
-    path('upload/<int:room_id>/', UploadMessageAttachment.as_view(), name='upload_message_attachment'),
+    path('', include(router.urls)),
 ]

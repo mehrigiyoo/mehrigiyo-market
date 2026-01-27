@@ -172,8 +172,8 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [("redis", 6379)]
-            # "hosts": [('127.0.0.1', 6379)],
+            # "hosts": [("redis", 6379)]
+            "hosts": [('127.0.0.1', 6379)],
         },
     },
 }
@@ -283,9 +283,13 @@ FIREBASE_REGISTRATION_KEYS = [env('ANDROID_REG_KEY'),  env('IOS_REG_KEY')]
 # FIREBASE_REGISTRATION_KEYS = ['1', '2']
 
 
+FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50 MB
 
-REDIS_HOST = 'redis'  # production
-# REDIS_HOST = '127.0.0.1'  localhost
+
+
+
+# REDIS_HOST = 'redis'  # production
+REDIS_HOST = '127.0.0.1'  #localhost
 REDIS_PORT = '6379'
 CELERY_BROKER_URL = 'redis://' + REDIS_HOST + ':' + REDIS_PORT + '/0'
 CELERY_BROKER_TRANSPORT_OPTIONS = {'visibility_timeout': 3600}
