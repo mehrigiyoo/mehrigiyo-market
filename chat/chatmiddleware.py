@@ -1,5 +1,6 @@
 from channels.auth import AuthMiddlewareStack
 from channels.db import database_sync_to_async
+from django.contrib.auth.models import AnonymousUser
 from rest_framework_simplejwt.tokens import UntypedToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from jwt import decode as jwt_decode
@@ -20,24 +21,18 @@ def get_user(token_key):
 
 from urllib.parse import parse_qs
 class TokenAuthMiddleware:
-
-    def __init__(self, inner):
-        self.inner = inner
-
     async def __call__(self, scope, receive, send):
-        # print(scope['path'])
-        # print(receive)
-        # print(send)
-        # query_params = parse_qs(scope["query_string"].decode())
-        # print(query_params["token"][-1])
-        scope = dict(scope)
-        token_key = parse_qs(scope["query_string"].decode())['token'][0]
         headers = dict(scope['headers'])
+        # headers keys are bytes, values are bytes
+        auth_header = headers.get(b'authorization', None)
+        token_key = None
+        if auth_header:
+            # b'Bearer <token>'
+            token_key = auth_header.decode().split(' ')[1]
 
-        scope['user'] = await get_user(token_key)
-
+        if not token_key:
+            scope['user'] = AnonymousUser()
+        else:
+            scope['user'] = await get_user(token_key)
 
         return await self.inner(scope, receive, send)
-
-
-TokenAuthMiddlewareStack = lambda inner: TokenAuthMiddleware(AuthMiddlewareStack(inner))
