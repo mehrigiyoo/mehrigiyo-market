@@ -48,6 +48,7 @@ class UserModel(AbstractUser):
     favorite_medicine = models.ManyToManyField('shop.Medicine', blank=True, related_name='fav_users')
     is_active = models.BooleanField(default=True)
     is_approved = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     USERNAME_FIELD = 'phone'   # login uchun default field
     REQUIRED_FIELDS = []        # email yoki first_name, last_name optional
