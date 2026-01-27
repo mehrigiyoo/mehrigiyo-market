@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     'drf_yasg',
     'django_filters',
     'admin_auto_filters',
+    'rest_framework_simplejwt.token_blacklist',
 
     'corsheaders',
 
