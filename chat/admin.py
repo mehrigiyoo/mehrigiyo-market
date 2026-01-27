@@ -1,52 +1,51 @@
-from admin_auto_filters.filters import AutocompleteFilter
-
 from django.contrib import admin
-from .models import ChatRoom, Message, FileMessage
+from admin_auto_filters.filters import AutocompleteFilter
+from .models import ChatRoom, Message, MessageAttachment
 
 
-class OwnerFilter(AutocompleteFilter):
-    title = "Owner"
-    field_name = 'owner'
+# Filters for admin
+class ParticipantFilter(AutocompleteFilter):
+    title = "Participant"
+    field_name = 'participants'
 
 
-class AdminFilter(AutocompleteFilter):
-    title = "Admin"
-    field_name = 'admin'
+class SenderFilter(AutocompleteFilter):
+    title = "Sender"
+    field_name = 'sender'
 
 
-class ClientFilter(AutocompleteFilter):
-    title = "Client"
-    field_name = 'client'
+# MessageAttachment Admin
+class MessageAttachmentAdmin(admin.ModelAdmin):
+    list_display = ['id', 'message', 'file', 'file_type', 'size', 'created_at']
+    list_filter = ['file_type']
+    search_fields = ['id', 'file']
+    autocomplete_fields = ['message']
 
 
-class DoktorFilter(AutocompleteFilter):
-    title = "Doktor"
-    field_name = 'doktor'
-
-
-class FileMessageAdmin(admin.ModelAdmin):
-    list_display = ['id', 'image', 'file', 'size', 'video', ]
-    list_filter = ['video', ]
-    search_fields = ['id', ]
-
-
+# Message Admin
 class MessageAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
-    list_display = ['id', 'owner', 'text', 'file_message', 'created_at', ]
-    list_filter = [OwnerFilter, ]
-    search_fields = ['id', 'text',]
-    autocomplete_fields = ['owner', 'file_message',]
+    list_display = ['id', 'room', 'sender', 'text', 'created_at']
+    list_filter = [SenderFilter]
+    search_fields = ['text', 'id']
+    autocomplete_fields = ['room', 'sender']
+    inlines = []  # Agar inline qilmoqchi bo'lsang MessageAttachment uchun
 
 
+# ChatRoom Admin
 class ChatRoomAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
-    list_display = ['id', 'admin', 'client', 'doktor', 'token', 'created_at', ]
-    list_filter = [AdminFilter, ClientFilter, DoktorFilter, ]
-    search_fields = ['id', 'token', ]
-    autocomplete_fields = ['admin', 'client', 'doktor', ]
-    filter_horizontal = ['messages', ]
+    list_display = ['id', 'get_participants', 'is_active', 'created_at']
+    list_filter = [ParticipantFilter]
+    search_fields = ['id']
+    filter_horizontal = ['participants']
+
+    def get_participants(self, obj):
+        return ", ".join([p.phone for p in obj.participants.all()])
+    get_participants.short_description = "Participants"
 
 
+# Register models
 admin.site.register(ChatRoom, ChatRoomAdmin)
 admin.site.register(Message, MessageAdmin)
-admin.site.register(FileMessage, FileMessageAdmin)
+admin.site.register(MessageAttachment, MessageAttachmentAdmin)
