@@ -13,7 +13,6 @@ https://docs.djangoproject.com/en/4.0/ref/settings/
 from datetime import timedelta
 from pathlib import Path
 import environ
-import os
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -174,8 +173,8 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            # "hosts": [("redis", 6379)]
-            "hosts": [('127.0.0.1', 6379)],
+            "hosts": [("redis", 6379)]
+            # "hosts": [('127.0.0.1', 6379)],
         },
     },
 }
