@@ -2,9 +2,8 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
-from .models import ChatRoom, Message, MessageAttachment
-from .serializers import MessageSerializer
-
+from django.conf import settings
+from .models import ChatRoom, Message
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -14,13 +13,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         # Anonymous user reject
         if self.user.is_anonymous:
-            await self.close()
+            await self.close(code=4001)
             return
 
         # Room access tekshirish
         has_access = await self.check_room_access()
         if not has_access:
-            await self.close()
+            await self.close(code=4003)
             return
 
         # Join room group
@@ -30,8 +29,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
         )
 
         await self.accept()
-        await self.send_chat_history()          # YANGI QOSHILDI
 
+        # ✅ CHAT HISTORY YUBORISH
+        await self.send_chat_history()
 
         # User online status
         await self.channel_layer.group_send(
@@ -42,47 +42,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 'status': 'online'
             }
         )
-
-    async def send_chat_history(self):
-        """Oxirgi 50 ta xabarni yuborish"""
-        messages = await self.get_recent_messages(limit=50)     # YANGI QOSHILDI
-
-        await self.send(text_data=json.dumps({
-            'type': 'chat_history',
-            'messages': messages,
-            'has_more': await self.has_more_messages()
-        }))
-
-    @database_sync_to_async
-    def get_recent_messages(self, limit=50):          # YANGI QOSHILDI
-        """Oxirgi xabarlarni olish"""
-        from rest_framework.request import Request
-        from django.http import HttpRequest
-
-        messages = Message.objects.filter(
-            room_id=self.room_id
-        ).select_related(
-            'sender', 'reply_to__sender'
-        ).prefetch_related(
-            'attachments'
-        ).order_by('-created_at')[:limit]
-
-        # Reverse (eskidan yangiga)
-        messages = list(reversed(messages))
-
-        # Serialize
-        http_request = HttpRequest()
-        http_request.user = self.user
-        request = Request(http_request)
-
-        serializer = MessageSerializer(messages, many=True, context={'request': request})
-        return serializer.data
-
-    @database_sync_to_async
-    def has_more_messages(self):
-        """Qo'shimcha xabarlar bormi"""
-        count = Message.objects.filter(room_id=self.room_id).count()    # YANGI QOSHILDI
-        return count > 50
 
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
@@ -112,55 +71,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.handle_typing(data)
         elif message_type == 'read_receipt':
             await self.handle_read_receipt(data)
-        elif message_type == 'load_more':  # YANGI QOSHILDI
+        elif message_type == 'load_more':
             await self.handle_load_more(data)
-
-    async def handle_load_more(self, data):            # YANGGI QOSHILDII
-        """Ko'proq xabarlar yuklash"""
-        before_id = data.get('before_id')  # Qaysi xabardan oldin
-        limit = data.get('limit', 50)
-
-        messages = await self.get_messages_before(before_id, limit)
-        has_more = await self.has_messages_before(before_id, limit)
-
-        await self.send(text_data=json.dumps({
-            'type': 'load_more_response',
-            'messages': messages,
-            'has_more': has_more
-        }))
-
-    @database_sync_to_async
-    def get_messages_before(self, before_id, limit=50):    # YANGI QOSHILDII
-        """before_id dan oldingi xabarlar"""
-        from rest_framework.request import Request
-        from django.http import HttpRequest
-
-        messages = Message.objects.filter(
-            room_id=self.room_id,
-            id__lt=before_id
-        ).select_related(
-            'sender', 'reply_to__sender'
-        ).prefetch_related(
-            'attachments'
-        ).order_by('-created_at')[:limit]
-
-        messages = list(reversed(messages))
-
-        http_request = HttpRequest()
-        http_request.user = self.user
-        request = Request(http_request)
-
-        serializer = MessageSerializer(messages, many=True, context={'request': request})
-        return serializer.data
-
-    @database_sync_to_async
-    def has_messages_before(self, before_id, limit=50):     # YANGI QOSHILDI
-        """Yana xabarlar bormi"""
-        count = Message.objects.filter(
-            room_id=self.room_id,
-            id__lt=before_id
-        ).count()
-        return count > limit
 
     async def handle_chat_message(self, data):
         """Yangi xabar yuborish"""
@@ -211,6 +123,31 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     'user_id': self.user.id
                 }
             )
+
+    async def send_chat_history(self):
+        """Oxirgi 50 ta xabarni yuborish"""
+        messages = await self.get_recent_messages(limit=50)
+        has_more = await self.has_more_messages()
+
+        await self.send(text_data=json.dumps({
+            'type': 'chat_history',
+            'messages': messages,
+            'has_more': has_more
+        }))
+
+    async def handle_load_more(self, data):
+        """Ko'proq xabarlar yuklash"""
+        before_id = data.get('before_id')
+        limit = data.get('limit', 50)
+
+        messages = await self.get_messages_before(before_id, limit)
+        has_more = await self.has_messages_before(before_id, limit)
+
+        await self.send(text_data=json.dumps({
+            'type': 'load_more_response',
+            'messages': messages,
+            'has_more': has_more
+        }))
 
     # Event handlers
     async def chat_message_handler(self, event):
@@ -279,16 +216,135 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def serialize_message(self, message):
-        from rest_framework.request import Request
-        from django.http import HttpRequest
+        """Message obyektini dict ga aylantirish (ABSOLUTE URLs)"""
+        return self._message_to_dict(message)
 
-        # Fake request for serializer context
-        http_request = HttpRequest()
-        http_request.user = self.user
-        request = Request(http_request)
+    def _get_base_url(self):
+        """Base URL olish (settings dan yoki default)"""
+        # settings.py da SITE_URL mavjud bo'lsa
+        if hasattr(settings, 'SITE_URL'):
+            return settings.SITE_URL
 
-        serializer = MessageSerializer(message, context={'request': request})
-        return serializer.data
+        # Yoki scope dan olish
+        headers = dict(self.scope.get('headers', []))
+        host = headers.get(b'host', b'localhost:8000').decode()
+
+        # Protocol aniqlash
+        is_secure = self.scope.get('scheme') == 'https'
+        protocol = 'https' if is_secure else 'http'
+
+        return f'{protocol}://{host}'
+
+    def _message_to_dict(self, message):
+        """
+        Message obyektini dict ga aylantirish
+        ✅ ABSOLUTE URLs bilan
+        """
+        base_url = self._get_base_url()
+
+        data = {
+            'id': message.id,
+            'room': message.room.id,
+            'sender': {
+                'id': message.sender.id,
+                'phone': message.sender.phone,
+                'first_name': message.sender.first_name or '',
+                'last_name': message.sender.last_name or '',
+                'role': message.sender.role,
+            },
+            'message_type': message.message_type,
+            'text': message.text,
+            'is_read': message.is_read,
+            'read_at': message.read_at.isoformat() if message.read_at else None,
+            'created_at': message.created_at.isoformat(),
+            'updated_at': message.updated_at.isoformat(),
+            'is_mine': message.sender.id == self.user.id,
+            'attachments': [],
+            'reply_to': None
+        }
+
+        # ✅ Attachments with ABSOLUTE URLs
+        for att in message.attachments.all():
+            file_url = None
+            thumbnail_url = None
+
+            if att.file:
+                file_url = f"{base_url}{att.file.url}"
+
+            if att.thumbnail:
+                thumbnail_url = f"{base_url}{att.thumbnail.url}"
+
+            data['attachments'].append({
+                'id': att.id,
+                'file_type': att.file_type,
+                'file_name': att.file_name,
+                'size': att.size,
+                'duration': att.duration,
+                'file_url': file_url,
+                'thumbnail_url': thumbnail_url,
+            })
+
+        # Reply to
+        if message.reply_to:
+            data['reply_to'] = {
+                'id': message.reply_to.id,
+                'sender': {
+                    'id': message.reply_to.sender.id,
+                    'phone': message.reply_to.sender.phone,
+                    'first_name': message.reply_to.sender.first_name or '',
+                },
+                'text': message.reply_to.text[:100] if message.reply_to.text else '',
+                'message_type': message.reply_to.message_type,
+            }
+
+        return data
+
+    @database_sync_to_async
+    def get_recent_messages(self, limit=50):
+        """Oxirgi xabarlarni olish"""
+        messages = Message.objects.filter(
+            room_id=self.room_id
+        ).select_related(
+            'sender', 'reply_to__sender'
+        ).prefetch_related(
+            'attachments'
+        ).order_by('-created_at')[:limit]
+
+        # Reverse (eskidan yangiga)
+        messages = list(reversed(messages))
+
+        # Manual serialization
+        return [self._message_to_dict(msg) for msg in messages]
+
+    @database_sync_to_async
+    def has_more_messages(self):
+        """Qo'shimcha xabarlar bormi"""
+        count = Message.objects.filter(room_id=self.room_id).count()
+        return count > 50
+
+    @database_sync_to_async
+    def get_messages_before(self, before_id, limit=50):
+        """before_id dan oldingi xabarlar"""
+        messages = Message.objects.filter(
+            room_id=self.room_id,
+            id__lt=before_id
+        ).select_related(
+            'sender', 'reply_to__sender'
+        ).prefetch_related(
+            'attachments'
+        ).order_by('-created_at')[:limit]
+
+        messages = list(reversed(messages))
+        return [self._message_to_dict(msg) for msg in messages]
+
+    @database_sync_to_async
+    def has_messages_before(self, before_id, limit=50):
+        """Yana xabarlar bormi"""
+        count = Message.objects.filter(
+            room_id=self.room_id,
+            id__lt=before_id
+        ).count()
+        return count > limit
 
     @database_sync_to_async
     def mark_message_read(self, message_id):

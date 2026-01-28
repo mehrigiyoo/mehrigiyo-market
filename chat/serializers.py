@@ -1,6 +1,9 @@
+# chat/serializers.py - FIXED ChatRoomSerializer
+
 from rest_framework import serializers
 from .models import ChatRoom, Message, MessageAttachment
 from account.models import UserModel
+from django.utils import timezone
 
 
 class UserMiniSerializer(serializers.ModelSerializer):
@@ -12,15 +15,10 @@ class UserMiniSerializer(serializers.ModelSerializer):
         fields = ['id', 'phone', 'first_name', 'last_name', 'avatar', 'role']
 
     def get_avatar(self, obj):
-        # Sizning user modelingizda avatar fieldi bo'lsa
-        # if hasattr(obj, 'avatar') and obj.avatar:
-        #     request = self.context.get('request')
-        #     if request:
-        #         return request.build_absolute_uri(obj.avatar.url)
-        # return None
-
         if hasattr(obj, 'avatar') and obj.avatar:
-            return obj.avatar.url  # /media/avatars/1.png kabi
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.avatar.url)
         return None
 
 
@@ -33,25 +31,15 @@ class MessageAttachmentSerializer(serializers.ModelSerializer):
         fields = ['id', 'file_type', 'file_name', 'size', 'duration', 'file_url', 'thumbnail_url', 'created_at']
 
     def get_file_url(self, obj):
-        # request = self.context.get('request')
-        # if obj.file and request:
-        #     return request.build_absolute_uri(obj.file.url)
-        # return None
-
-        if obj.file:
-            return obj.file.url
+        request = self.context.get('request')
+        if obj.file and request:
+            return request.build_absolute_uri(obj.file.url)
         return None
 
-
-    # def get_thumbnail_url(self, obj):
-    #     request = self.context.get('request')
-    #     if obj.thumbnail and request:
-    #         return request.build_absolute_uri(obj.thumbnail.url)
-    #     return None
-
     def get_thumbnail_url(self, obj):
-        if obj.thumbnail:
-            return obj.thumbnail.url
+        request = self.context.get('request')
+        if obj.thumbnail and request:
+            return request.build_absolute_uri(obj.thumbnail.url)
         return None
 
 
@@ -87,7 +75,6 @@ class MessageSerializer(serializers.ModelSerializer):
         return False
 
 
-# Mavjud MessageCreateSerializer ni yangilash
 class MessageCreateSerializer(serializers.ModelSerializer):
     """Message yaratish uchun (text va files)"""
     attachments = serializers.ListField(
@@ -128,9 +115,11 @@ class MessageCreateSerializer(serializers.ModelSerializer):
         attachments_data = validated_data.pop('attachments', [])
         validated_data['sender'] = self.context['request'].user
 
-        # Auto-detect message_type
+        # Auto-detect message_type agar text yo'q bo'lsa
         if attachments_data and not validated_data.get('text'):
             validated_data['message_type'] = self._get_file_type(attachments_data[0].name)
+        elif not validated_data.get('message_type'):
+            validated_data['message_type'] = 'text'
 
         message = Message.objects.create(**validated_data)
 
@@ -150,11 +139,11 @@ class MessageCreateSerializer(serializers.ModelSerializer):
     def _get_file_type(self, filename):
         """Fayl turini aniqlash"""
         ext = filename.lower().split('.')[-1]
-        if ext in ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']:
+        if ext in ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg']:
             return 'image'
-        elif ext in ['mp4', 'avi', 'mov', 'wmv', 'mkv', 'flv']:
+        elif ext in ['mp4', 'avi', 'mov', 'wmv', 'mkv', 'flv', 'webm']:
             return 'video'
-        elif ext in ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac']:
+        elif ext in ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'opus']:
             return 'audio'
         else:
             return 'file'
@@ -183,7 +172,11 @@ class ChatRoomSerializer(serializers.ModelSerializer):
         ]
 
     def get_last_message(self, obj):
-        last_msg = obj.messages.select_related('sender').prefetch_related('attachments').last()
+        """
+        FIXED: Prefetch ichida slice ishlatmaslik
+        To'g'ridan-to'g'ri query
+        """
+        last_msg = obj.messages.select_related('sender').prefetch_related('attachments').order_by('-created_at').first()
         if last_msg:
             return MessageSerializer(last_msg, context=self.context).data
         return None
@@ -221,9 +214,8 @@ class ChatRoomCreateSerializer(serializers.Serializer):
         return value
 
     def create(self, validated_data):
-        current_user = self.context['request'].user  # Client
-        other_user = UserModel.objects.get(id=validated_data['user_id'])  # Doctor
+        current_user = self.context['request'].user
+        other_user = UserModel.objects.get(id=validated_data['user_id'])
 
-        # Oldingi room borligini tekshiradi
         room, created = ChatRoom.get_or_create_private_room(current_user, other_user)
         return room

@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
-from django.db.models import Q, Prefetch, Count
+from django.db.models import Q, Prefetch, Count, Max
 from django.utils import timezone
 from .models import ChatRoom, Message, MessageAttachment
 from .serializers import (
@@ -28,9 +28,10 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
         return ChatRoom.objects.filter(
             participants=self.request.user
         ).prefetch_related(
-            'participants',
-            Prefetch('messages', queryset=Message.objects.select_related('sender').order_by('-created_at')[:1])
-        ).distinct()
+            'participants'
+        ).annotate(
+            last_message_time_annotated=Max('messages__created_at')
+        ).order_by('-last_message_time_annotated').distinct()
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -51,7 +52,6 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
         """Chatdagi barcha xabarlar"""
         room = self.get_object()
 
-        # Access tekshirish
         if not room.participants.filter(id=request.user.id).exists():
             return Response(
                 {'detail': 'Sizda bu chatga kirish huquqi yo\'q'},
@@ -60,7 +60,6 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
 
         messages = room.messages.select_related('sender').prefetch_related('attachments', 'reply_to__sender')
 
-        # Pagination
         paginator = MessagePagination()
         page = paginator.paginate_queryset(messages, request)
 
@@ -72,7 +71,6 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
         """Chatdagi barcha xabarlarni o'qilgan deb belgilash"""
         room = self.get_object()
 
-        # Access tekshirish
         if not room.participants.filter(id=request.user.id).exists():
             return Response(
                 {'detail': 'Sizda bu chatga kirish huquqi yo\'q'},
@@ -122,34 +120,84 @@ class MessageViewSet(viewsets.ModelViewSet):
         return MessageSerializer
 
     def create(self, request, *args, **kwargs):
+        """Yangi xabar yuborish (text yoki file)"""
         serializer = self.get_serializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         message = serializer.save()
 
-        #  WebSocket broadcast
+        # ✅ Message data tayyorlash (ABSOLUTE URLs bilan)
+        message_data = self._prepare_message_data(message, request)
+
+        # ✅ WebSocket broadcast
         channel_layer = get_channel_layer()
         room_group_name = f'chat_{message.room.id}'
 
-        output_serializer = MessageSerializer(message, context={'request': request})
+        try:
+            async_to_sync(channel_layer.group_send)(
+                room_group_name,
+                {
+                    'type': 'chat_message_handler',
+                    'message': message_data
+                }
+            )
+        except Exception as e:
+            print(f"WebSocket broadcast error: {e}")
 
-        async_to_sync(channel_layer.group_send)(
-            room_group_name,
-            {
-                'type': 'chat_message_handler',
-                'message': output_serializer.data
+        return Response(message_data, status=status.HTTP_201_CREATED)
+
+    def _prepare_message_data(self, message, request):
+        """
+        Message obyektini dict ga aylantirish
+        ABSOLUTE URLs bilan
+        """
+        data = {
+            'id': message.id,
+            'room': message.room.id,
+            'sender': {
+                'id': message.sender.id,
+                'phone': message.sender.phone,
+                'first_name': message.sender.first_name or '',
+                'last_name': message.sender.last_name or '',
+                'role': message.sender.role,
+            },
+            'message_type': message.message_type,
+            'text': message.text,
+            'is_read': message.is_read,
+            'read_at': message.read_at.isoformat() if message.read_at else None,
+            'created_at': message.created_at.isoformat(),
+            'updated_at': message.updated_at.isoformat(),
+            'is_mine': message.sender.id == request.user.id,
+            'attachments': [],
+            'reply_to': None
+        }
+
+        # ✅ Attachments with ABSOLUTE URLs
+        for att in message.attachments.all():
+            attachment_data = {
+                'id': att.id,
+                'file_type': att.file_type,
+                'file_name': att.file_name,
+                'size': att.size,
+                'duration': att.duration,
+                'file_url': request.build_absolute_uri(att.file.url) if att.file else None,
+                'thumbnail_url': request.build_absolute_uri(att.thumbnail.url) if att.thumbnail else None,
             }
-        )
+            data['attachments'].append(attachment_data)
 
-        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+        # Reply to
+        if message.reply_to:
+            data['reply_to'] = {
+                'id': message.reply_to.id,
+                'sender': {
+                    'id': message.reply_to.sender.id,
+                    'phone': message.reply_to.sender.phone,
+                    'first_name': message.reply_to.sender.first_name or '',
+                },
+                'text': message.reply_to.text[:100] if message.reply_to.text else '',
+                'message_type': message.reply_to.message_type,
+            }
 
-    # def create(self, request, *args, **kwargs):
-    #     """Yangi xabar yuborish"""
-    #     serializer = self.get_serializer(data=request.data, context={'request': request})
-    #     serializer.is_valid(raise_exception=True)
-    #     message = serializer.save()
-    #
-    #     output_serializer = MessageSerializer(message, context={'request': request})
-    #     return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+        return data
 
     @action(detail=True, methods=['post'])
     def mark_read(self, request, pk=None):

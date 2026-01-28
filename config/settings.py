@@ -38,6 +38,8 @@ DEBUG = env('DEBUG')
 
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
 
+SITE_URL = 'http://127.0.0.1:8000'
+
 # Application definition
 SITE_ID = 1
 INSTALLED_APPS = [
@@ -283,8 +285,21 @@ FIREBASE_REGISTRATION_KEYS = [env('ANDROID_REG_KEY'),  env('IOS_REG_KEY')]
 # FIREBASE_REGISTRATION_KEYS = ['1', '2']
 
 
+# File upload settings
 FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50 MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50 MB
 
+# Allowed file extensions (optional)
+ALLOWED_FILE_EXTENSIONS = [
+    # Images
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg',
+    # Videos
+    'mp4', 'avi', 'mov', 'wmv', 'mkv', 'flv', 'webm',
+    # Audio
+    'mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'opus',
+    # Files
+    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'zip', 'rar'
+]
 
 
 
