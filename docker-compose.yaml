@@ -7,15 +7,15 @@ services:
       - .env
     command: >
       sh -c "python manage.py migrate &&
-      python manage.py collectstatic --noinput &&
-      daphne -b 0.0.0.0 -p 8000 config.asgi:application
-             "
+             python manage.py collectstatic --noinput &&
+             daphne -b 0.0.0.0 -p 8000 config.asgi:application"
     volumes:
       - .:/Doctor
-      - ./staticfiles:/Doctor/staticfiles   # hostdagi folderni bog‘laymiz
+      - ./staticfiles:/Doctor/staticfiles
       - ./mediafiles:/Doctor/mediafiles
+      - ./logs:/Doctor/logs
     ports:
-      - "8021:8000"
+      - "127.0.0.1:8021:8000"  # Faqat localhost expose
     depends_on:
       doctor_db:
         condition: service_healthy
@@ -25,33 +25,101 @@ services:
     environment:
       FIREBASE_CRED_PATH: /run/secrets/firebase_cred.json
     secrets:
-      - source: firebase_cred
-        target: firebase_cred.json
+      - firebase_cred
+    networks:
+      - doctor_network
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
 
   doctor_db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: doctor
-      POSTGRES_USER: user_doctor
-      POSTGRES_PASSWORD: password_doctor
-    ports:
-      - "5436:5432"
+    image: postgres:15-alpine  # Alpine lighter
+    env_file:
+      - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups  # Backup directory
+    # Port faqat localhost (security)
+    ports:
+      - "127.0.0.1:5436:5432"
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user_doctor -d doctor"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user_doctor} -d ${POSTGRES_DB:-doctor}"]
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
+    networks:
+      - doctor_network
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
 
   redis:
     image: redis:alpine
-    ports:
-      - "6372:6379"
     volumes:
       - redis_data:/data
+    # Port faqat localhost
+    ports:
+      - "127.0.0.1:6372:6379"
     restart: always
+    # Persistence config
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    networks:
+      - doctor_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  celery:
+    build: .
+    env_file:
+      - .env
+    command: celery -A config worker -l info --concurrency=4
+    volumes:
+      - .:/Doctor
+      - ./logs:/Doctor/logs
+    depends_on:
+      - redis
+      - doctor_db
+    restart: always
+    networks:
+      - doctor_network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  celery-beat:
+    build: .
+    env_file:
+      - .env
+    command: celery -A config beat -l info
+    volumes:
+      - .:/Doctor
+      - ./logs:/Doctor/logs
+    depends_on:
+      - redis
+      - celery
+    restart: always
+    networks:
+      - doctor_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 
 secrets:
   firebase_cred:
@@ -59,25 +127,10 @@ secrets:
 
 volumes:
   postgres_data:
-  staticfiles:   # host bilan bog‘lanadi
-  mediafiles:
+    driver: local
   redis_data:
+    driver: local
 
-
-
-
-
-
-
-
-
-
-
-#version: "3.3"
-#
-#
-#services:
-#  redis:
-#    image: redis
-#    ports:
-#      - "6379:6379"
+networks:
+  doctor_network:
+    driver: bridge

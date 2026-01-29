@@ -60,6 +60,7 @@ urlpatterns = [
         # path('notification/send/', SendNotificationView.as_view()),
 
         path('specialist/', include('specialist.urls')),
+        path('call/', include('call.urls')),  # Call API
         path('chat/', include('chat.urls')),
         path('client/', include('client.urls')),
         path('support/', include('support.urls')),

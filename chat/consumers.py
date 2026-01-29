@@ -358,3 +358,31 @@ class ChatConsumer(AsyncWebsocketConsumer):
         except Message.DoesNotExist:
             pass
         return False
+
+
+
+
+
+
+# CALL
+
+
+async def call_cancelled(self, event):
+    """
+    Call cancelled signal
+    """
+    await self.send(text_data=json.dumps({
+        'type': 'call_cancelled',
+        'call_id': event['call_id'],
+        'cancelled_by': event['cancelled_by'],
+    }))
+
+async def call_missed(self, event):
+    """
+    Call missed signal (timeout)
+    """
+    await self.send(text_data=json.dumps({
+        'type': 'call_missed',
+        'call_id': event['call_id'],
+        'reason': event.get('reason', 'timeout'),
+    }))

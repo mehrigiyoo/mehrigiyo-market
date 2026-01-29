@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/4.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
-
+import os
 from datetime import timedelta
 from pathlib import Path
 import environ
@@ -31,13 +31,24 @@ environ.Env.read_env(BASE_DIR / '.env')
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env('SECRET_KEY')
-
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
-
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
 
-SITE_URL = 'http://127.0.0.1:8000'
+# Production security (faqat DEBUG=False da)
+if not DEBUG:
+    # HTTPS settings (keyinroq SSL qo'shganda)
+    # SECURE_SSL_REDIRECT = True
+    # SESSION_COOKIE_SECURE = True
+    # CSRF_COOKIE_SECURE = True
+
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+
+    # HSTS (keyinroq SSL qo'shganda)
+    # SECURE_HSTS_SECONDS = 31536000
+    # SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    # SECURE_HSTS_PRELOAD = True
 
 # Application definition
 SITE_ID = 1
@@ -68,6 +79,7 @@ INSTALLED_APPS = [
     'specialist',
     'news',
     'comment',
+    'call',
     'chat',
     'api',
     'client',
@@ -159,25 +171,24 @@ AUTH_PASSWORD_VALIDATORS = [
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-        # 'rest_framework.schemas.coreapi.AutoSchema',
     ],
+    # 'DEFAULT_PERMISSION_CLASSES': [
+    #     'rest_framework.permissions.IsAuthenticated',
+    # ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/hour',
+        'user': '1000/hour',
+    },
+
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
     'PAGE_SIZE': 10,
 
-    'DEFAULT_THROTTLE_RATES': {
-        'send_sms': '5/m'
-    }
 }
 
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            "hosts": [("redis", 6379)]
-            # "hosts": [('127.0.0.1', 6379)],
-        },
-    },
-}
 
 SWAGGER_SETTINGS = {
     'SECURITY_DEFINITIONS': {
@@ -300,15 +311,134 @@ ALLOWED_FILE_EXTENSIONS = [
     'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'zip', 'rar'
 ]
 
+REDIS_HOST = env('REDIS_HOST', default='redis')
+REDIS_PORT = env('REDIS_PORT', default='6379')
 
+CELERY_BROKER_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/0'
+CELERY_RESULT_BACKEND = f'redis://{REDIS_HOST}:{REDIS_PORT}/0'
 
-# REDIS_HOST = 'redis'  # production
-REDIS_HOST = '127.0.0.1'  #localhost
-REDIS_PORT = '6379'
-CELERY_BROKER_URL = 'redis://' + REDIS_HOST + ':' + REDIS_PORT + '/0'
 CELERY_BROKER_TRANSPORT_OPTIONS = {'visibility_timeout': 3600}
-CELERY_RESULT_BACKEND = 'redis://' + REDIS_HOST + ':' + REDIS_PORT + '/0'
 CELERY_ACCEPT_CONTENT = ['application/json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Tashkent'
+
+
+CELERY_BEAT_SCHEDULE = {
+    'check-call-timeouts': {
+        'task': 'call.tasks.check_call_timeouts',
+        'schedule': 30.0,  # Every 30 seconds
+    },
+}
+
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [(REDIS_HOST, int(REDIS_PORT))],
+        },
+    },
+}
+
+
+# CACHE CONFIGURATION (Redis)
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/1',
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        },
+        'KEY_PREFIX': 'doctor_call',
+        'TIMEOUT': 3600,
+    }
+}
+
+
+# LIVEKIT CONFIGURATION
+LIVEKIT_API_KEY = env('LIVEKIT_API_KEY')
+LIVEKIT_API_SECRET = env('LIVEKIT_API_SECRET')
+LIVEKIT_WS_URL = env('LIVEKIT_WS_URL')
+LIVEKIT_HTTP_URL = env('LIVEKIT_HTTP_URL')
+
+if DEBUG:
+    SITE_URL = 'http://127.0.0.1:8021'
+else:
+    SITE_URL = 'http://imorganic.uz'  # keyinroq https
+
+
+# CALL CONFIGURATION
+
+# Maximum call duration (seconds) - for billing/limits
+MAX_CALL_DURATION = 3600 * 2  # 2 hours
+
+# Call timeout settings
+CALL_RING_TIMEOUT = 60  # Auto-reject after 60 seconds
+CALL_ANSWER_TIMEOUT = 300  # Auto-end if not answered in 5 minutes
+
+# Concurrent calls limit per user
+MAX_CONCURRENT_CALLS_PER_USER = 1
+
+# Call recording settings
+CALL_RECORDING_ENABLED = False  # Enable in production if needed
+CALL_RECORDING_STORAGE = 'local'  # 'local' or 's3'
+
+
+
+# LOGGING CONFIGURATION
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose' if DEBUG else 'simple',
+        },
+        'file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'django.log',
+            'maxBytes': 1024 * 1024 * 10,  # 10MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': 'INFO' if not DEBUG else 'DEBUG',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'call': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'chat': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+
+
+
+
+
