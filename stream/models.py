@@ -107,6 +107,14 @@ class StreamViewer(models.Model):
             models.Index(fields=['stream', 'user']),
         ]
 
+    def calculate_watch_duration(self):
+        """Calculate how long user watched"""
+        if self.joined_at and self.left_at:
+            delta = self.left_at - self.joined_at
+            self.watch_duration = max(0, int(delta.total_seconds()))
+            self.save(update_fields=['watch_duration'])
+
+
 
 class StreamChat(models.Model):
     stream = models.ForeignKey(LiveStream, on_delete=models.CASCADE, related_name='chat_messages')
