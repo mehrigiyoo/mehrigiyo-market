@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     'specialist',
     'news',
     'comment',
+    'stream',
     'call',
     'chat',
     'api',
