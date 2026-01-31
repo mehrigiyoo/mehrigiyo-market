@@ -22,12 +22,17 @@ class FCMNotification:
             from firebase_admin import credentials
 
             if not firebase_admin._apps:
-                # Firebase credentials from Docker volume
-                cred_path = '/Doctor/firebase-cred.json'
+                # ✅ YANGI PATH
+                cred_path = '/Doctor/config/firebase-cred.json'
 
                 import os
                 if not os.path.exists(cred_path):
                     logger.error(f"Firebase credentials not found at {cred_path}")
+                    return False
+
+                # Check if it's a file (not directory)
+                if not os.path.isfile(cred_path):
+                    logger.error(f"Firebase credentials is not a file: {cred_path}")
                     return False
 
                 cred = credentials.Certificate(cred_path)
@@ -37,9 +42,6 @@ class FCMNotification:
 
             return True
 
-        except ImportError:
-            logger.error("❌ firebase-admin not installed")
-            return False
         except Exception as e:
             logger.error(f"❌ Firebase initialization failed: {e}")
             return False

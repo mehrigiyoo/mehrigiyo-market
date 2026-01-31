@@ -14,7 +14,7 @@ services:
       - ./staticfiles:/Doctor/staticfiles
       - ./mediafiles:/Doctor/mediafiles
       - ./logs:/Doctor/logs
-      - ./config/mehrigiyo-firebase-adminsdk.json:/Doctor/firebase-cred.json:ro
+      - ./config/mehrigiyo-firebase-adminsdk.json:/Doctor/config/firebase-cred.json:ro
     ports:
       - "127.0.0.1:8021:8000"  # Faqat localhost expose
     depends_on:
@@ -24,7 +24,7 @@ services:
         condition: service_started
     restart: always
     environment:
-      FIREBASE_CRED_PATH: /Doctor/firebase-cred.json
+      FIREBASE_CRED_PATH: /Doctor/config/firebase-cred.json
     networks:
       - doctor_network
     # Resource limits
