@@ -10,6 +10,7 @@ import uuid
 import logging
 
 from .models import Call, CallEvent
+from .notification import send_call_notification
 from .serializers import (
     CallSerializer, CallListSerializer,
     CallInitiateSerializer
@@ -102,7 +103,7 @@ class CallViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # ✅ BUSY CHECK - YANGI!
+            #  BUSY CHECK - YANGI!
             # Check if caller is busy
             caller_busy = Call.objects.filter(
                 Q(caller=caller) | Q(receiver=caller),
@@ -205,6 +206,18 @@ class CallViewSet(viewsets.ModelViewSet):
                     'livekit_ws_url': livekit_service.ws_url,
                 }
             )
+
+            # 2. FCM Notification
+            try:
+                send_call_notification(
+                    receiver=receiver,
+                    call=call,
+                    caller=caller
+                )
+                logger.info(f"FCM notification sent for call {call.id}")
+            except Exception as e:
+                logger.error(f"FCM notification failed for call {call.id}: {e}")
+                # Don't fail the call if notification fails
 
             logger.info(f"Call initiated: {call.id} - {caller} → {receiver} ({call_type})")
 

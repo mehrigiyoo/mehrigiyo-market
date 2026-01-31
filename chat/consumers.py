@@ -151,9 +151,23 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     # Event handlers
     async def chat_message_handler(self, event):
+        """
+        Handle chat message broadcast
+        Calculate is_mine for current user
+        """
+        message_data = event['message']
+
+        # ✅ Calculate is_mine for THIS user
+        sender_id = message_data.get('sender', {}).get('id')
+        current_user_id = self.user.id
+
+        # Override is_mine with correct value for this user
+        message_data['is_mine'] = (sender_id == current_user_id)
+
+        # Send to WebSocket
         await self.send(text_data=json.dumps({
             'type': 'chat_message',
-            'message': event['message']
+            'message': message_data
         }))
 
     async def typing_handler(self, event):
@@ -361,28 +375,60 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
 
 
-
-
-
 # CALL
 
 
-async def call_cancelled(self, event):
-    """
-    Call cancelled signal
-    """
-    await self.send(text_data=json.dumps({
-        'type': 'call_cancelled',
-        'call_id': event['call_id'],
-        'cancelled_by': event['cancelled_by'],
-    }))
+    async def call_incoming(self, event):
+        """Incoming call notification"""
+        await self.send(text_data=json.dumps({
+            'type': 'call_incoming',
+            'call_id': event['call_id'],
+            'call_type': event['call_type'],
+            'caller': event['caller'],
+            'livekit_room_name': event['livekit_room_name'],
+            'livekit_token': event['livekit_token'],
+            'livekit_ws_url': event['livekit_ws_url'],
+        }))
 
-async def call_missed(self, event):
-    """
-    Call missed signal (timeout)
-    """
-    await self.send(text_data=json.dumps({
-        'type': 'call_missed',
-        'call_id': event['call_id'],
-        'reason': event.get('reason', 'timeout'),
-    }))
+
+    async def call_answered(self, event):
+        """Call answered notification"""
+        await self.send(text_data=json.dumps({
+            'type': 'call_answered',
+            'call_id': event['call_id'],
+            'answerer': event.get('answerer', {}),
+        }))
+
+
+    async def call_rejected(self, event):
+        """Call rejected notification"""
+        await self.send(text_data=json.dumps({
+            'type': 'call_rejected',
+            'call_id': event['call_id'],
+        }))
+
+
+    async def call_ended(self, event):
+        """Call ended notification"""
+        await self.send(text_data=json.dumps({
+            'type': 'call_ended',
+            'call_id': event['call_id'],
+            'duration': event.get('duration', 0),
+        }))
+
+
+    async def call_cancelled(self, event):
+        """Call cancelled notification"""
+        await self.send(text_data=json.dumps({
+            'type': 'call_cancelled',
+            'call_id': event['call_id'],
+        }))
+
+
+    async def call_missed(self, event):
+        """Call missed notification"""
+        await self.send(text_data=json.dumps({
+            'type': 'call_missed',
+            'call_id': event['call_id'],
+            'reason': event.get('reason', 'timeout'),
+        }))
