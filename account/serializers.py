@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import UserModel, CountyModel, RegionModel, OfferModel
+from .models import UserModel, CountyModel, RegionModel, OfferModel, UserDevice
 from config.validators import PhoneValidator, normalize_phone
 
 
@@ -85,66 +85,6 @@ class UserAvatarSerializer(serializers.ModelSerializer):
         fields = ('avatar',)
 
 
-# class RegistrationSerializer(serializers.ModelSerializer):
-#     invited = serializers.CharField(required=False, write_only=True)
-#     password2 = serializers.CharField(write_only=True)  # password confirm
-#
-#     class Meta:
-#         model = UserModel
-#         fields = [
-#             'phone', 'first_name', 'last_name',
-#             'password', 'password2', 'email', 'avatar', 'role', 'invited'
-#         ]
-#         extra_kwargs = {
-#             'password': {'write_only': True},
-#             'avatar': {'required': False},
-#             'email': {'required': False},
-#             'role': {'required': False}
-#         }
-#
-#     def validate(self, attrs):
-#         if attrs.get('password') != attrs.get('password2'):
-#             raise serializers.ValidationError({"password": "Passwordlar mos kelmayapti!"})
-#
-#         attrs['role'] = UserModel.Roles.CLIENT
-#         return attrs
-#
-#     def create(self, validated_data):
-#         inviter_code = validated_data.pop('invited', None)
-#         validated_data.pop('password2', None)  # password2 faqat tekshiruv uchun
-#
-#         password = validated_data.pop('password', None)
-#         user = UserModel.objects.create_user(password=password, **validated_data)
-#         user.role = UserModel.Roles.CLIENT
-#         user.save()
-#
-#         # ClientProfile yaratish
-#         from client.models import ClientProfile
-#         ClientProfile.objects.create(user=user)
-#
-#         # Referral va Payme jarayoni
-#         if inviter_code:
-#             inviter_qs = UserModel.objects.filter(phone=inviter_code).first()
-#             if inviter_qs:
-#                 try:
-#                     Referrals.objects.create(
-#                         user=inviter_qs,
-#                         invited_user=user.phone
-#                     )
-#                     PaymeTransactionModel.objects.create(
-#                         request_id=inviter_code,
-#                         order_id=user.phone,
-#                         phone=user.phone,
-#                         amount=10000 * 100,
-#                         status='processing',
-#                         _type='referal',
-#                     )
-#                 except Exception:
-#                     user.delete()
-#                     raise serializers.ValidationError("Referral jarayoni muvaffaqiyatsiz bo‘ldi.")
-#
-#         return user
-
 class CustomTokenSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
@@ -187,9 +127,37 @@ class UserSerializer(serializers.ModelSerializer):
         }
 
 
+class UserDeviceSerializer(serializers.ModelSerializer):
+    """Device serializer"""
+
+    class Meta:
+        model = UserDevice
+        fields = [
+            'id', 'fcm_token', 'device_id', 'device_type',
+            'device_name', 'is_active', 'created_at', 'last_active'
+        ]
+        read_only_fields = ['id', 'created_at', 'last_active']
+
+    def create(self, validated_data):
+        """Create or update device"""
+        user = self.context['request'].user
+        device_id = validated_data.get('device_id')
+
+        # Check if device exists
+        device, created = UserDevice.objects.update_or_create(
+            user=user,
+            device_id=device_id,
+            defaults=validated_data
+        )
+
+        return device
+
+
 class ReferalUserSerializer(serializers.ModelSerializer):
     referral_count = serializers.IntegerField(source='referrals.count', read_only=True)
 
     class Meta:
         model = UserModel
         fields = ['id', 'phone', 'first_name', 'last_name', 'referral_count', 'is_active']
+
+

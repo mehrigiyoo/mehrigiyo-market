@@ -60,6 +60,56 @@ class UserModel(AbstractUser):
     def __str__(self): return f"{self.id} | {self.phone} | {self.role}"
 
 
+# ============================================
+# FILE: account/models.py - ADD THIS MODEL
+# ============================================
+
+class UserDevice(models.Model):
+    """
+    User's device for FCM push notifications
+
+    Each user can have multiple devices (phone, tablet, etc)
+    """
+
+    DEVICE_TYPE_CHOICES = (
+        ('android', 'Android'),
+        ('ios', 'iOS'),
+        ('web', 'Web'),
+    )
+
+    user = models.ForeignKey(
+        UserModel,
+        on_delete=models.CASCADE,
+        related_name='devices'
+    )
+
+    # FCM token from Firebase
+    fcm_token = models.CharField(max_length=255, unique=True)
+
+    # Device info
+    device_id = models.CharField(max_length=255)  # Unique device identifier
+    device_type = models.CharField(max_length=20, choices=DEVICE_TYPE_CHOICES, default='android')
+    device_name = models.CharField(max_length=100, blank=True)  # e.g. "iPhone 13", "Samsung Galaxy"
+
+    # Status
+    is_active = models.BooleanField(default=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_active = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'user_devices'
+        unique_together = ['user', 'device_id']
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['fcm_token']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.phone} - {self.device_type} ({self.device_id})"
+
 # Referrals
 class Referrals(models.Model):
     # inviter = models.CharField(max_length=16, db_index=True)
@@ -122,20 +172,6 @@ class RegionModel(models.Model):
 
     def __str__(self):
         return self.name
-
-
-# class DeliveryAddress(models.Model):
-#     user = models.ForeignKey(UserModel, on_delete=models.RESTRICT)
-#     name = models.CharField(max_length=255, null=True, blank=True)
-#     region = models.ForeignKey(RegionModel, on_delete=models.RESTRICT, null=True)
-#     full_address = models.CharField(max_length=255, null=True, blank=True)
-#     apartment_office = models.CharField(max_length=255, null=True, blank=True)
-#     floor = models.CharField(max_length=255, null=True, blank=True)
-#     door_or_phone = models.CharField(max_length=255, null=True, blank=True)
-#     instructions = models.CharField(max_length=255, null=True, blank=True)
-# 
-#     def __str__(self):
-#         return f"{self.user}'s delivery address: {self.region}, {self.full_address}, {self.apartment_office} {self.floor} floor, {self.door_or_phone}"
 
 
 class OfferModel(models.Model):

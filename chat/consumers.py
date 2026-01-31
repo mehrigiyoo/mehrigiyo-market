@@ -3,6 +3,8 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
 from django.conf import settings
+
+from utils.fcm import send_fcm
 from .models import ChatRoom, Message
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -75,12 +77,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.handle_load_more(data)
 
     async def handle_chat_message(self, data):
-        """Yangi xabar yuborish"""
+        """Handle incoming chat message"""
         text = data.get('text', '')
-        reply_to_id = data.get('reply_to')
 
-        # Message saqlash
-        message = await self.save_message(text, reply_to_id)
+        # Save message
+        message = await self.save_message(text)
 
         if message:
             # Serialize message
@@ -94,6 +95,43 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     'message': message_data
                 }
             )
+
+            # ✅ Send FCM to other user
+            await self.send_fcm_notification(message)
+
+    async def send_fcm_notification(self, message):
+        """Send FCM for new message"""
+        # Get other user in room
+        other_user = await self.get_other_user()
+
+        if other_user:
+            await self._send_fcm(other_user, message)
+
+    @database_sync_to_async
+    def get_other_user(self):
+        """Get the other participant in room"""
+        try:
+            from chat.models import ChatRoom
+            room = ChatRoom.objects.get(id=self.room_id)
+            participants = room.participants.exclude(id=self.user.id)
+            return participants.first()
+        except:
+            return None
+
+    @database_sync_to_async
+    def _send_fcm(self, user, message):
+        """Send FCM notification"""
+        send_fcm(
+            user=user,
+            type='new_message',
+            title=f"{self.user.first_name or self.user.phone}",
+            body=message.text[:100] if message.text else 'Sent a file',
+            room_id=self.room_id,
+            message_id=message.id,
+            sender_id=self.user.id,
+            sender_name=self.user.first_name or self.user.phone,
+            sender_avatar=self.user.avatar.url if self.user.avatar else '',
+        )
 
     async def handle_typing(self, data):
         """Typing indicator"""

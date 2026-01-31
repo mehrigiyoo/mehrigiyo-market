@@ -1,8 +1,16 @@
-from django.urls import path
+from django.db import router
+from django.urls import path, include
 from rest_framework_simplejwt.views import TokenRefreshView
+from rest_framework.routers import DefaultRouter
 
 from .views import (SendSmsView, ConfirmSmsView, ChangePassword, UserAvatarUpdateView, PhoneCheckAPI, RegionView,
-                    CountryView, ResetPasswordAPIView, LogoutAPIView, DeleteAccountAPIView)
+                    CountryView, ResetPasswordAPIView, LogoutAPIView, DeleteAccountAPIView, UserDeviceViewSet)
+
+
+# Router yaratish
+router = DefaultRouter()
+router.register(r'devices', UserDeviceViewSet, basename='device')
+
 
 urlpatterns = [
     path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
@@ -16,6 +24,8 @@ urlpatterns = [
     path('avatar/update/', UserAvatarUpdateView.as_view()),
     path('country/', CountryView.as_view()),
     path('region/', RegionView.as_view()),
+
+    path('', include(router.urls)),
     # path('add/address/', AddAddressView.as_view()),
     # path('for-admin-user/', UserForAdminViewAPI.as_view()),
     # path('for-admin-referal-user/', ReferalUserForAdminViewAPI.as_view()),

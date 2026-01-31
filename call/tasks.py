@@ -1,11 +1,12 @@
 # call/tasks.py
-from asgiref.sync import async_to_sync
+from datetime import timedelta
 from celery import shared_task
-from channels.layers import get_channel_layer
 from django.db import models
 from django.utils import timezone
 from django.conf import settings
-from .models import Call, CallEvent
+
+from utils.fcm import send_fcm
+from .models import Call
 import logging
 from .service import livekit_service
 
@@ -94,60 +95,57 @@ def generate_call_analytics(date=None):
 @shared_task
 def check_call_timeouts():
     """
-    Check and mark unanswered calls as missed
-    Runs every 30 seconds via Celery Beat
+    Check for call timeouts and mark as missed
+    Runs every 30 seconds
     """
-    timeout_seconds = 60
-    threshold = timezone.now() - timezone.timedelta(seconds=timeout_seconds)
+    logger.info(" Checking for call timeouts...")
 
-    # Find unanswered calls older than threshold
-    unanswered_calls = Call.objects.filter(
+    # 60 seconds timeout
+    timeout_threshold = timezone.now() - timedelta(seconds=60)
+
+    # Find timed out calls
+    timed_out_calls = Call.objects.filter(
         status__in=['initiated', 'ringing'],
-        created_at__lt=threshold
-    ).select_related('caller', 'receiver', 'room')
+        created_at__lt=timeout_threshold
+    ).select_related('caller', 'receiver')
 
-    count = 0
-    for call in unanswered_calls:
+    missed_count = 0
+    for call in timed_out_calls:
         try:
             # Mark as missed
             call.status = 'missed'
             call.ended_at = timezone.now()
-            call.save()
+            call.save(update_fields=['status', 'ended_at'])
 
-            # Log event
-            CallEvent.objects.create(
-                call=call,
-                event_type='missed',
+            # Send FCM notification
+            send_fcm(
                 user=call.receiver,
-                metadata={'reason': 'timeout', 'timeout_seconds': timeout_seconds}
+                type='call_missed',
+                title="Missed call",
+                body=f"You missed a call from {call.caller.first_name or call.caller.phone}",
+                call_id=call.id,
+                caller_id=call.caller.id,
+                caller_name=call.caller.first_name or call.caller.phone,
+                caller_phone=call.caller.phone,
+                caller_avatar=call.caller.avatar.url if call.caller.avatar else '',
+                call_type=call.call_type,
+                missed_at=call.created_at.isoformat(),
             )
 
-            # End LiveKit room
-            livekit_service.delete_room(call.livekit_room_name)
-
-            # WebSocket notification
+            # Delete LiveKit room
             try:
-                channel_layer = get_channel_layer()
-                room_group_name = f'chat_{call.room.id}'
+                from .service import livekit_service
+                livekit_service.delete_room(call.livekit_room_name)
+            except Exception as e:
+                logger.warning(f"Failed to delete room: {e}")
 
-                async_to_sync(channel_layer.group_send)(
-                    room_group_name,
-                    {
-                        'type': 'call_missed',
-                        'call_id': call.id,
-                        'reason': 'timeout'
-                    }
-                )
-            except Exception as ws_error:
-                logger.warning(f"WebSocket notification failed: {ws_error}")
-
-            logger.info(f"Call {call.id} marked as missed (timeout) - {call.caller} → {call.receiver}")
-            count += 1
+            logger.info(f"📞 Call {call.id} marked as missed")
+            missed_count += 1
 
         except Exception as e:
-            logger.error(f"Error marking call {call.id} as missed: {e}")
+            logger.error(f"Error processing call {call.id}: {e}")
 
-    if count > 0:
-        logger.info(f"Marked {count} call(s) as missed")
+    if missed_count > 0:
+        logger.info(f" Marked {missed_count} calls as missed")
 
-    return f"Checked calls, marked {count} as missed"
+    return f"Processed {missed_count} calls"

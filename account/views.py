@@ -2,7 +2,7 @@ from django.contrib.auth import authenticate
 from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework import generics, status
+from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.generics import UpdateAPIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -15,11 +15,12 @@ from config.responses import ResponseFail, ResponseSuccess
 from config.validators import normalize_phone
 from shop.models import Medicine
 from shop.serializers import MedicineSerializer
-from .models import UserModel, CountyModel, RegionModel, SmsCode
+from .models import UserModel, CountyModel, RegionModel, SmsCode, UserDevice
 from .serializers import (SmsSerializer, ConfirmSmsSerializer,
                           RegionSerializer, CountrySerializer, UserSerializer, PkSerializer,
                           OfferSerializer, ChangePasswordSerializer, ReferalUserSerializer, UserAvatarSerializer,
                           PhoneCheckSerializer, ResetPasswordSerializer, LogoutSerializer, DeleteAccountSerializer,
+                          UserDeviceSerializer,
                           )
 
 
@@ -421,7 +422,70 @@ class ReferalUserForAdminViewAPI(generics.ListAPIView):
         return Response({'status': 'success', 'action': action})
 
 
+class UserDeviceViewSet(viewsets.ModelViewSet):
+    """
+    User Device Management
 
+    Endpoints:
+    - POST   /api/devices/          - Register device
+    - GET    /api/devices/          - List my devices
+    - DELETE /api/devices/{id}/     - Remove device
+    - POST   /api/devices/{id}/deactivate/ - Deactivate device
+    """
 
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserDeviceSerializer
 
+    def get_queryset(self):
+        """Get current user's devices"""
+        return UserDevice.objects.filter(user=self.request.user)
 
+    def create(self, request):
+        """
+        Register/Update device
+
+        POST /api/devices/
+        {
+            "fcm_token": "eyJhbGc...",
+            "device_id": "unique_device_id_123",
+            "device_type": "android",
+            "device_name": "Samsung Galaxy S21"
+        }
+        """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Create or update
+        device = serializer.save()
+
+        # Mark device as active
+        device.is_active = True
+        device.save()
+
+        return Response(
+            UserDeviceSerializer(device).data,
+            status=status.HTTP_201_CREATED
+        )
+
+    def destroy(self, request, pk=None):
+        """Delete device"""
+        device = self.get_object()
+        device.delete()
+
+        return Response(
+            {'message': 'Device removed'},
+            status=status.HTTP_204_NO_CONTENT
+        )
+
+    @action(detail=True, methods=['post'])
+    def deactivate(self, request, pk=None):
+        """
+        Deactivate device (stop receiving notifications)
+
+        POST /api/devices/{id}/deactivate/
+        """
+        device = self.get_object()
+        device.is_active = False
+        device.save()
+
+        return Response({'message': 'Device deactivated'})

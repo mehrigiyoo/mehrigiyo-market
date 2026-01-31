@@ -4,13 +4,11 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Q
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
 import uuid
 import logging
 
+from utils.fcm import send_fcm
 from .models import Call, CallEvent
-from .notification import send_call_notification
 from .serializers import (
     CallSerializer, CallListSerializer,
     CallInitiateSerializer
@@ -187,37 +185,23 @@ class CallViewSet(viewsets.ModelViewSet):
                 metadata=f'{{"user_id": {receiver.id}, "role": "{receiver.role}"}}'
             )
 
-            # WebSocket signal
-            self._send_websocket_signal(
+            # FCM: INCOMING CALL
+            send_fcm(
+                user=receiver,
+                type='call_incoming',
+                title=f"Incoming {call_type} call",
+                body=f"{caller.first_name or caller.phone} is calling you",
+                call_id=call.id,
+                caller_id=caller.id,
+                caller_name=caller.first_name or caller.phone,
+                caller_phone=caller.phone,
+                caller_avatar=caller.avatar.url if caller.avatar else '',
+                call_type=call.call_type,
                 room_id=chat_room.id,
-                signal_type='call_incoming',
-                data={
-                    'call_id': call.id,
-                    'call_type': call_type,
-                    'caller': {
-                        'id': caller.id,
-                        'phone': caller.phone,
-                        'first_name': caller.first_name or '',
-                        'last_name': caller.last_name or '',
-                        'role': caller.role,
-                    },
-                    'livekit_room_name': livekit_room_name,
-                    'livekit_token': receiver_token,
-                    'livekit_ws_url': livekit_service.ws_url,
-                }
+                livekit_room_name=livekit_room_name,
+                livekit_token=receiver_token,
+                livekit_ws_url=livekit_service.ws_url,
             )
-
-            # 2. FCM Notification
-            try:
-                send_call_notification(
-                    receiver=receiver,
-                    call=call,
-                    caller=caller
-                )
-                logger.info(f"FCM notification sent for call {call.id}")
-            except Exception as e:
-                logger.error(f"FCM notification failed for call {call.id}: {e}")
-                # Don't fail the call if notification fails
 
             logger.info(f"Call initiated: {call.id} - {caller} → {receiver} ({call_type})")
 
@@ -289,6 +273,17 @@ class CallViewSet(viewsets.ModelViewSet):
             # Update status
             call.mark_status('answered')
 
+            # FCM: CALL ANSWERED (to caller)
+            send_fcm(
+                user=call.caller,
+                type='call_answered',
+                title="Call answered",
+                body=f"{request.user.first_name or request.user.phone} answered your call",
+                call_id=call.id,
+                answerer_id=request.user.id,
+                answerer_name=request.user.first_name or request.user.phone,
+            )
+
             # Log event
             CallEvent.objects.create(
                 call=call,
@@ -302,20 +297,6 @@ class CallViewSet(viewsets.ModelViewSet):
                 participant_identity=request.user.id,
                 participant_name=f"{request.user.first_name or request.user.phone}",
                 metadata=f'{{"user_id": {request.user.id}, "role": "{request.user.role}"}}'
-            )
-
-            # Send signal to caller
-            self._send_websocket_signal(
-                room_id=call.room.id,
-                signal_type='call_answered',
-                data={
-                    'call_id': call.id,
-                    'answerer': {
-                        'id': request.user.id,
-                        'phone': request.user.phone,
-                        'first_name': request.user.first_name or '',
-                    }
-                }
             )
 
             logger.info(f"Call answered: {call.id} by {request.user}")
@@ -368,6 +349,15 @@ class CallViewSet(viewsets.ModelViewSet):
             # Update status
             call.mark_status('rejected')
 
+            # FCM: CALL REJECTED (to caller)
+            send_fcm(
+                user=call.caller,
+                type='call_rejected',
+                title="Call rejected",
+                body=f"{request.user.first_name or request.user.phone} rejected your call",
+                call_id=call.id,
+            )
+
             # Log event
             CallEvent.objects.create(
                 call=call,
@@ -377,20 +367,6 @@ class CallViewSet(viewsets.ModelViewSet):
 
             # End LiveKit room
             livekit_service.delete_room(call.livekit_room_name)
-
-            # Send signal to caller
-            self._send_websocket_signal(
-                room_id=call.room.id,
-                signal_type='call_rejected',
-                data={
-                    'call_id': call.id,
-                    'rejecter': {
-                        'id': request.user.id,
-                        'phone': request.user.phone,
-                        'first_name': request.user.first_name or '',
-                    }
-                }
-            )
 
             logger.info(f"Call rejected: {call.id} by {request.user}")
 
@@ -441,6 +417,15 @@ class CallViewSet(viewsets.ModelViewSet):
             # Update status
             call.mark_status('cancelled')
 
+            # FCM: CALL CANCELLED (to receiver)
+            send_fcm(
+                user=call.receiver,
+                type='call_cancelled',
+                title="Call cancelled",
+                body=f"{call.caller.first_name or call.caller.phone} cancelled the call",
+                call_id=call.id,
+            )
+
             # Log event
             CallEvent.objects.create(
                 call=call,
@@ -451,20 +436,6 @@ class CallViewSet(viewsets.ModelViewSet):
 
             # End LiveKit room
             livekit_service.delete_room(call.livekit_room_name)
-
-            # Send signal to receiver
-            self._send_websocket_signal(
-                room_id=call.room.id,
-                signal_type='call_cancelled',
-                data={
-                    'call_id': call.id,
-                    'cancelled_by': {
-                        'id': request.user.id,
-                        'phone': request.user.phone,
-                        'first_name': request.user.first_name or '',
-                    }
-                }
-            )
 
             logger.info(f"Call cancelled: {call.id} by {request.user}")
 
@@ -514,6 +485,19 @@ class CallViewSet(viewsets.ModelViewSet):
             # Update status
             call.mark_status('ended')
 
+            # Get other user
+            other_user = call.receiver if request.user == call.caller else call.caller
+
+            # FCM: CALL ENDED (to other user)
+            send_fcm(
+                user=other_user,
+                type='call_ended',
+                title="Call ended",
+                body=f"Call with {request.user.first_name or request.user.phone} ended",
+                call_id=call.id,
+                duration=call.duration,
+            )
+
             # Log event
             CallEvent.objects.create(
                 call=call,
@@ -524,21 +508,6 @@ class CallViewSet(viewsets.ModelViewSet):
             # End LiveKit room
             livekit_service.delete_room(call.livekit_room_name)
 
-            # Send signal to other participant
-            self._send_websocket_signal(
-                room_id=call.room.id,
-                signal_type='call_ended',
-                data={
-                    'call_id': call.id,
-                    'ended_by': {
-                        'id': request.user.id,
-                        'phone': request.user.phone,
-                        'first_name': request.user.first_name or '',
-                    },
-                    'duration': call.duration,
-                    'formatted_duration': call.formatted_duration
-                }
-            )
 
             logger.info(f"Call ended: {call.id} by {request.user}, duration: {call.formatted_duration}")
 
@@ -625,29 +594,3 @@ class CallViewSet(viewsets.ModelViewSet):
 
 
 
-    # HELPER METHODS
-    def _send_websocket_signal(self, room_id, signal_type, data):
-        """
-        Send WebSocket signal to chat room
-
-        Args:
-            room_id: Chat room ID
-            signal_type: Signal type (call_incoming, call_answered, etc.)
-            data: Signal data
-        """
-        try:
-            channel_layer = get_channel_layer()
-            room_group_name = f'chat_{room_id}'
-
-            async_to_sync(channel_layer.group_send)(
-                room_group_name,
-                {
-                    'type': signal_type,
-                    **data
-                }
-            )
-
-            logger.debug(f"WebSocket signal sent: {signal_type} to room {room_id}")
-
-        except Exception as e:
-            logger.error(f"Error sending WebSocket signal: {e}", exc_info=True)

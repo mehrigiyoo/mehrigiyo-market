@@ -1,6 +1,6 @@
 from admin_auto_filters.filters import AutocompleteFilter
 from django.contrib import admin
-from .models import CountyModel, RegionModel, OfferModel, Referrals, SmsCode
+from .models import CountyModel, RegionModel, OfferModel, Referrals, SmsCode, UserDevice
 from modeltranslation.admin import TabbedTranslationAdmin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from account.models import UserModel
@@ -100,6 +100,29 @@ class SmsCodeAdmin(admin.ModelAdmin):
     ordering = ('-expire_at',)
 
     list_per_page = 25
+
+
+@admin.register(UserDevice)
+class UserDeviceAdmin(admin.ModelAdmin):
+    list_display = [
+        'id', 'user', 'device_type', 'device_name',
+        'is_active', 'created_at', 'last_active'
+    ]
+    list_filter = ['device_type', 'is_active', 'created_at']
+    search_fields = ['user__phone', 'device_id', 'fcm_token']
+    readonly_fields = ['created_at', 'updated_at', 'last_active']
+
+    fieldsets = (
+        ('User', {
+            'fields': ('user',)
+        }),
+        ('Device Info', {
+            'fields': ('fcm_token', 'device_id', 'device_type', 'device_name')
+        }),
+        ('Status', {
+            'fields': ('is_active', 'created_at', 'updated_at', 'last_active')
+        }),
+    )
 
 
 admin.site.register(CountyModel, CountryAdmin)
