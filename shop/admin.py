@@ -48,6 +48,7 @@ class TypeMedicineAdmin(TabbedTranslationAdmin):
 
 class MedicineAdmin(TabbedTranslationAdmin):
     date_hierarchy = 'created_at'
+    exclude = ('name', 'review', 'weight', 'order_count')
     list_display = (
         'id', 'title', 'image', 'description', 'quantity', 'type_medicine',
         'cost', 'discount', 'created_at',)
@@ -76,7 +77,6 @@ admin.site.register(DeliveryMan, DeliveryManAdmin)
 
 class OrderModelAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
-    exclude = ('name',)
     list_display = ['id', 'user', 'credit_card', 'price', 'payment_type', 'payment_status',
                     'delivery_status', 'delivery', 'created_at', ]
     list_filter = [UserFilter, CreditCardFilter, ShippingAddressFilter, 'payment_type', 'payment_status',
