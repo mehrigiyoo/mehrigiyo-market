@@ -76,6 +76,7 @@ admin.site.register(DeliveryMan, DeliveryManAdmin)
 
 class OrderModelAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
+    exclude = ('name',)
     list_display = ['id', 'user', 'credit_card', 'price', 'payment_type', 'payment_status',
                     'delivery_status', 'delivery', 'created_at', ]
     list_filter = [UserFilter, CreditCardFilter, ShippingAddressFilter, 'payment_type', 'payment_status',
