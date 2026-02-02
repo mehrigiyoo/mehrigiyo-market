@@ -95,29 +95,41 @@ def generate_call_analytics(date=None):
 @shared_task
 def check_call_timeouts():
     """
-    Check for call timeouts and mark as missed
-    Runs every 30 seconds
+    Check for unanswered calls and mark as missed
+
+    IMPORTANT: Only timeout calls that are NOT answered!
+    - initiated: No response yet → mark as missed
+    - ringing: Ringing but not answered → mark as missed
+    - answered: Call ongoing → DO NOT timeout!
     """
-    logger.info(" Checking for call timeouts...")
+    logger.info("🔔 Checking for call timeouts...")
 
     # 60 seconds timeout
     timeout_threshold = timezone.now() - timedelta(seconds=60)
 
-    # Find timed out calls
-    timed_out_calls = Call.objects.filter(
-        status__in=['initiated', 'ringing'],
+    #  ONLY unanswered calls (NOT answered or ended)
+    unanswered_calls = Call.objects.filter(
+        status__in=['initiated', 'ringing'],  # ← Only these statuses!
         created_at__lt=timeout_threshold
     ).select_related('caller', 'receiver')
 
     missed_count = 0
-    for call in timed_out_calls:
+    for call in unanswered_calls:
         try:
+            # Double check status (race condition prevention)
+            call.refresh_from_db()
+
+            # ✅ Skip if call was answered or already ended
+            if call.status not in ['initiated', 'ringing']:
+                logger.info(f"⏭️  Call {call.id} already {call.status}, skipping")
+                continue
+
             # Mark as missed
             call.status = 'missed'
             call.ended_at = timezone.now()
             call.save(update_fields=['status', 'ended_at'])
 
-            # Send FCM notification
+            # Send FCM to receiver
             send_fcm(
                 user=call.receiver,
                 type='call_missed',
@@ -137,7 +149,7 @@ def check_call_timeouts():
                 from .service import livekit_service
                 livekit_service.delete_room(call.livekit_room_name)
             except Exception as e:
-                logger.warning(f"Failed to delete room: {e}")
+                logger.warning(f"Failed to delete LiveKit room: {e}")
 
             logger.info(f"📞 Call {call.id} marked as missed")
             missed_count += 1
@@ -146,6 +158,6 @@ def check_call_timeouts():
             logger.error(f"Error processing call {call.id}: {e}")
 
     if missed_count > 0:
-        logger.info(f" Marked {missed_count} calls as missed")
+        logger.info(f"✅ Marked {missed_count} calls as missed")
 
     return f"Processed {missed_count} calls"
