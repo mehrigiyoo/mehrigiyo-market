@@ -406,35 +406,35 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose' if DEBUG else 'simple',
         },
-        'file': {
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': BASE_DIR / 'logs' / 'django.log',
-            'maxBytes': 1024 * 1024 * 10,  # 10MB
-            'backupCount': 5,
-            'formatter': 'verbose',
-        },
+        # 'file': {
+        #     'class': 'logging.handlers.RotatingFileHandler',
+        #     'filename': BASE_DIR / 'logs' / 'django.log',
+        #     'maxBytes': 1024 * 1024 * 10,  # 10MB
+        #     'backupCount': 5,
+        #     'formatter': 'verbose',
+        # },
     },
-    'root': {
-        'handlers': ['console', 'file'],
-        'level': 'INFO' if not DEBUG else 'DEBUG',
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'call': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'chat': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-    },
+    # 'root': {
+    #     'handlers': ['console', 'file'],
+    #     'level': 'INFO' if not DEBUG else 'DEBUG',
+    # },
+    # 'loggers': {
+    #     'django': {
+    #         'handlers': ['console', 'file'],
+    #         'level': 'INFO',
+    #         'propagate': False,
+    #     },
+    #     'call': {
+    #         'handlers': ['console', 'file'],
+    #         'level': 'INFO',
+    #         'propagate': False,
+    #     },
+    #     'chat': {
+    #         'handlers': ['console', 'file'],
+    #         'level': 'INFO',
+    #         'propagate': False,
+    #     },
+    # },
 }
 
 

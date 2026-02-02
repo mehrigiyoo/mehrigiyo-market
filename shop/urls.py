@@ -1,8 +1,7 @@
 from django.urls import path, include, re_path
 from rest_framework import routers
-
 from .views import (MedicinesView, TypeMedicineView, MedicineRetrieveView, CartView,
-                    SearchView, OrderStatusAPIView, MedicineByTypeView)
+                    OrderStatusAPIView, MedicineByTypeView, MedicineSearchAPIView, TypeMedicineSearchAPIView)
 
 router = routers.DefaultRouter()
 router.register(r'types', TypeMedicineView)
@@ -18,7 +17,8 @@ urlpatterns = [
     path('cart/', CartView.as_view()),
     # path('checkout/', OrderView.as_view()),
 
-    path('search/', SearchView.as_view(), name='search'),
-    path('order/statistics/', OrderStatusAPIView.as_view(), name='search'),
+    path('medicines/search/', MedicineSearchAPIView.as_view()),
+    path('types/search/', TypeMedicineSearchAPIView.as_view()),
+    # path('order/statistics/', OrderStatusAPIView.as_view(), name='search'),
 
 ]

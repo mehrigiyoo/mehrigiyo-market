@@ -4,7 +4,7 @@ from django.db import models
 today = datetime.date.today()
 
 class TypeMedicine(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, db_index=True)
     image = models.ImageField(upload_to=f'types/', null=True, blank=True)
     icon = models.ImageField(upload_to=f'types/icons/', null=True, blank=True)
 
@@ -14,8 +14,8 @@ class TypeMedicine(models.Model):
 
 class Medicine(models.Model):
     image = models.ImageField(upload_to=f'medicine/', null=True, blank=True)
-    name = models.CharField(max_length=100)
-    title = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, db_index=True, blank=True, null=True)
+    title = models.CharField(max_length=100, db_index=True)
     order_count = models.IntegerField(default=0)
     description = models.TextField(null=True)
     quantity = models.IntegerField(default=0)

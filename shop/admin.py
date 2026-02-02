@@ -49,10 +49,10 @@ class TypeMedicineAdmin(TabbedTranslationAdmin):
 class MedicineAdmin(TabbedTranslationAdmin):
     date_hierarchy = 'created_at'
     list_display = (
-        'id', 'name', 'title', 'image', 'order_count', 'description', 'quantity', 'review', 'weight', 'type_medicine',
+        'id', 'title', 'image', 'description', 'quantity', 'type_medicine',
         'cost', 'discount', 'created_at',)
     list_filter = [TypeMedicineFilter, ]
-    search_fields = ['id', 'name', 'title', 'order_count', 'description', 'quantity', 'review', 'weight', 'cost',
+    search_fields = ['id', 'title', 'description', 'cost',
                      'discount', ]
     autocomplete_fields = ['type_medicine', ]
     inlines = [PicturesMedicineInline]

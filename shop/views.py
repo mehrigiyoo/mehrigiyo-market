@@ -13,7 +13,7 @@ from .serializers import (TypeMedicineSerializer, MedicineSerializer, CartSerial
                           OrderStatusSerializer,
                           MedicineTypeSerializer, CartCreateUpdateSerializer, MedicineDetailSerializer)
 from .models import TypeMedicine, Medicine, CartModel, OrderModel
-from rest_framework import viewsets, generics
+from rest_framework import viewsets, generics, filters
 from drf_yasg.utils import swagger_auto_schema
 from specialist.models import Doctor, AdviceTime
 from specialist.serializers import DoctorProfileSerializer
@@ -237,176 +237,29 @@ class CartView(APIView):
         )
 
 
-# class OrderView(APIView):
-#     permission_classes = (IsAuthenticated,)
-#     serializer_class = CartSerializer
-#
-#     @swagger_auto_schema(
-#         operation_id='get_order_model',
-#         operation_description="get_order_model",
-#         # request_body=OrderShowSerializer(),
-#         responses={
-#             '200': OrderShowSerializer()
-#         },
-#
-#     )
-#     def get(self, request):
-#         orders = OrderModel.objects.filter(user=request.user)
-#         serializer = OrderShowSerializer(orders, many=True)
-#         return ResponseSuccess(data=serializer.data, request=request.method)
-#
-#     @swagger_auto_schema(
-#         operation_id='create_cart_model',
-#         operation_description="To create cart model",
-#         request_body=ListSerializer(),
-#         responses={
-#             '200': OrderShowSerializer()
-#         },
-#
-#     )
-#     def post(self, request):
-#         ides = request.data['list'].split(',')
-#         carts = CartModel.objects.filter(user=request.user, status=1, id__in=ides)
-#         order = OrderModel()
-#         order.user = request.user
-#         order.save()
-#         summa = 0
-#         for i in carts:
-#             order.cart_products.add(i)
-#             summa += i.get_total_price
-#             # i.status = 2
-#             # i.save()
-#         order.price = summa
-#         order.save()
-#         serializer = OrderShowSerializer(order)
-#         return ResponseSuccess(data=serializer.data, request=request.method)
-#
-#     @swagger_auto_schema(
-#         operation_id='create_order_model',
-#         operation_description="To add shipping address to order",
-#         request_body=OrderPutSerializer(),
-#         responses={
-#             '200': OrderShowSerializer()
-#         },
-#
-#     )
-#     def put(self, request):
-#         credit_card = request.data['credit_card']
-#         cart = CartModel.objects.filter(user=request.user, status=1)
-#         card = None
-#
-#         try:
-#             order = OrderModel.objects.get(id=request.data['id'])
-#         except:
-#             return ResponseFail(data='Order not found')
-#
-#         try:
-#             id = request.data['shipping_address']
-#             da = DeliveryAddress.objects.get(id=id)
-#             add_key = 1
-#         except:
-#             add_key = 0
-#
-#         if add_key == 1:
-#             order.shipping_address = da
-#
-#         if credit_card is not None:
-#             try:
-#                 card = Card.objects.get(id=request.data['credit_card'])
-#                 # print(card, '<---------------------------------')
-#                 order.credit_card = card
-#                 order.payment_type = 2
-#             except:
-#                 return ResponseFail(data='Credit Card Not found')
-#         else:
-#             order.payment_type = 1
-#             order.payment_status = 3
-#             order.save()
-#
-#             send_order(order.id)
-#
-#             for product in cart:
-#                 product.status = 2
-#                 product.save()
-#
-#         try:
-#             del request.data['id']
-#             serializer = OrderCreateSerializer(order, data=request.data)
-#             if serializer.is_valid():
-#                 if add_key == 1:
-#                     if order.shipping_address is None:
-#                         if da.region.delivery_price == 0:
-#                             order.price = order.price + settings.DEFAULT_DELIVERY_COST
-#                         else:
-#                             order.price = order.price + da.region.delivery_price
-#                     else:
-#                         old_price = order.shipping_address.region.delivery_price
-#
-#                         if old_price == 0:
-#                             order.price = order.price - settings.DEFAULT_DELIVERY_COST
-#                         else:
-#                             order.price = order.price - old_price
-#
-#                         if da.region.delivery_price == 0:
-#                             order.price = order.price + settings.DEFAULT_DELIVERY_COST
-#                         else:
-#                             order.price = order.price + da.region.delivery_price
-#
-#                 order.save()
-#                 serializer.save()
-#                 serializer = OrderShowSerializer(order)
-#                 return ResponseSuccess(data=serializer.data, request=request.method)
-#             else:
-#                 return ResponseFail(data=serializer.errors, request=request.method)
-#         except Exception as e:
-#             print(f'\n\nexception : {e}\n\n')
+
+class MedicineSearchAPIView(generics.ListAPIView):
+    queryset = Medicine.objects.filter(is_active=True)
+    serializer_class = MedicineSerializer
+    filter_backends = [filters.SearchFilter]
+
+    search_fields = [
+        'name',
+        'title',
+        'description',
+        'type_medicine__name',
+        'content_uz',
+        'content_ru',
+        'content_en',
+    ]
 
 
-class SearchView(APIView):
-    @swagger_auto_schema(
-        operation_id='search',
-        operation_description="Search",
-        # request_body=RoomsSerializer(),
-        manual_parameters=[
-            openapi.Parameter('key', openapi.IN_QUERY, description="write key",
-                              type=openapi.TYPE_STRING),
-            openapi.Parameter('medicines', openapi.IN_QUERY, description="medicines",
-                              type=openapi.TYPE_BOOLEAN),
-            openapi.Parameter('doctors', openapi.IN_QUERY, description="doctors",
-                              type=openapi.TYPE_BOOLEAN),
-            openapi.Parameter('news', openapi.IN_QUERY, description="news",
-                              type=openapi.TYPE_BOOLEAN)
-        ]
-    )
-    def get(self, request):
-        key = request.GET.get('key', False)
-        medicines = request.GET.get('medicines', False)
-        doctors = request.GET.get('doctors', False)
-        news = request.GET.get('news', False)
+class TypeMedicineSearchAPIView(generics.ListAPIView):
+    queryset = TypeMedicine.objects.all()
+    serializer_class = TypeMedicineSerializer
+    filter_backends = [filters.SearchFilter]
 
-        data = {}
-        if key:
-            if medicines:
-                med = []
-                med.extend(Medicine.objects.filter(name__contains=key))
-                med.extend(Medicine.objects.filter(type_medicine__name__contains=key))
-                med.extend(Medicine.objects.filter(title__contains=key))
-                med_ser = MedicineSerializer(med, many=True)
-                data['medicines'] = med_ser.data
-            if doctors:
-                doc = []
-                doc.extend(Doctor.objects.filter(full_name__contains=key))
-                doc.extend(Doctor.objects.filter(type_doctor__name__contains=key))
-                doc_ser = DoctorProfileSerializer(doc, many=True)
-                data['doctors'] = doc_ser.data
-            if news:
-                new = []
-                new.extend(NewsModel.objects.filter(name__contains=key))
-                new.extend(NewsModel.objects.filter(description__contains=key))
-                new_ser = NewsModelSerializer(new, many=True)
-                data['news'] = new_ser.data
-
-        return ResponseSuccess(data=data)
+    search_fields = ['name']
 
 
 # Order statictic
