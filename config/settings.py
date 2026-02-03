@@ -83,7 +83,8 @@ INSTALLED_APPS = [
     'chat',
     'api',
     'client',
-    'support'
+    'support',
+    'partner_auth'
 ]
 
 
@@ -108,6 +109,7 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'partner_auth.middleware.PartnerRateLimitMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -345,6 +347,7 @@ CHANNEL_LAYERS = {
 # CACHE CONFIGURATION (Redis)
 CACHES = {
     'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         'BACKEND': 'django_redis.cache.RedisCache',
         'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/1',
         'OPTIONS': {

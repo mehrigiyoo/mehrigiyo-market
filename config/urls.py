@@ -65,6 +65,7 @@ urlpatterns = [
         path('chat/', include('chat.urls')),
         path('client/', include('client.urls')),
         path('support/', include('support.urls')),
+        path('partner/', include('partner_auth.urls')),
         path('admin/', include('api.urls')),
 
         # path('config/', include([
