@@ -32,6 +32,17 @@ class LiveStreamConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
+        # Role check: faqat doctorlar ulanishi mumkin
+        if self.user.role != 'doctor':
+            await self.close()
+            return
+
+        # Streamni DBdan olish
+        stream = await self.get_stream()
+        if not stream or not stream.is_live:  # End qilingan streamga connect qilmaslik
+            await self.close()
+            return
+
         # Join stream group
         await self.channel_layer.group_add(
             self.stream_group_name,
@@ -40,11 +51,9 @@ class LiveStreamConsumer(AsyncWebsocketConsumer):
 
         await self.accept()
 
-        # Add viewer to stream
-        await self.add_viewer()
-
-        # Send viewer count update
-        await self.send_viewer_count()
+        if stream.is_live:
+            await self.add_viewer()
+            await self.send_viewer_count()
 
         logger.info(f"User {self.user.id} connected to stream {self.stream_id}")
 
@@ -56,11 +65,13 @@ class LiveStreamConsumer(AsyncWebsocketConsumer):
             self.channel_name
         )
 
-        # Remove viewer from stream
-        await self.remove_viewer()
+        # Streamni olish
+        stream = await self.get_stream()
 
-        # Send updated viewer count
-        await self.send_viewer_count()
+        # Faqat live stream uchun viewer update qilish
+        if stream and stream.is_live:
+            await self.remove_viewer()
+            await self.send_viewer_count()
 
         logger.info(f"User {self.user.id} disconnected from stream {self.stream_id}")
 
@@ -110,10 +121,12 @@ class LiveStreamConsumer(AsyncWebsocketConsumer):
 
         # Check if chat enabled
         stream = await self.get_stream()
-        if not stream or not stream.chat_enabled:
+
+        # Faqat live stream va chat enabled bo‘lsa davom etadi
+        if not stream or not stream.chat_enabled or not stream.is_live:
             await self.send(text_data=json.dumps({
                 'type': 'error',
-                'message': 'Chat is disabled'
+                'message': 'Chat is disabled or stream ended'
             }))
             return
 
@@ -148,6 +161,9 @@ class LiveStreamConsumer(AsyncWebsocketConsumer):
         from .models import StreamReaction
         valid_types = [choice[0] for choice in StreamReaction.REACTION_CHOICES]
 
+        stream = await self.get_stream()
+        if not stream or not stream.is_live:
+            return
         if reaction_type not in valid_types:
             return
 
