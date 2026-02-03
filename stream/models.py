@@ -90,6 +90,11 @@ class LiveStream(models.Model):
         self.save()
         cache.delete(self.cache_key_viewers)
 
+    @property
+    def is_live(self):
+        return self.status == 'live'
+
+
 
 class StreamViewer(models.Model):
     stream = models.ForeignKey(LiveStream, on_delete=models.CASCADE, related_name='viewers')

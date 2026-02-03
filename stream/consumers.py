@@ -34,7 +34,7 @@ class LiveStreamConsumer(AsyncWebsocketConsumer):
 
         # Streamni DBdan olish
         stream = await self.get_stream()
-        if not stream or not stream.is_live:  # End qilingan streamga connect qilmaslik
+        if not stream or not stream.is_live:
             await self.close()
             return
 
