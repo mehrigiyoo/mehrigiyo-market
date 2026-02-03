@@ -32,11 +32,6 @@ class LiveStreamConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
-        # Role check: faqat doctorlar ulanishi mumkin
-        if self.user.role != 'doctor':
-            await self.close()
-            return
-
         # Streamni DBdan olish
         stream = await self.get_stream()
         if not stream or not stream.is_live:  # End qilingan streamga connect qilmaslik
