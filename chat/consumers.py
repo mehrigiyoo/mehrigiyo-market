@@ -376,13 +376,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'caller': {
                 'id': call.caller.id,
                 'phone': call.caller.phone,
-                'first_name': call.caller.first_name or '',
-                'last_name': call.caller.last_name or '',
+                'full_name': call.caller.full_name or '',
             },
             'call_type': call.call_type,  # audio / video
             'status': call.status,  # ended / missed / rejected
             'duration': call.duration,  # seconds
-            'started_at': call.started_at.isoformat() if call.started_at else None,
+            'started_at': call.answered_at.isoformat() if call.answered_at else None,
             'ended_at': call.ended_at.isoformat() if call.ended_at else None,
             'created_at': call.created_at.isoformat(),
             'timestamp': call.created_at.timestamp(),  # ← Sorting uchun
@@ -394,8 +393,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             data['receiver'] = {
                 'id': call.receiver.id,
                 'phone': call.receiver.phone,
-                'first_name': call.receiver.first_name or '',
-                'last_name': call.receiver.last_name or '',
+                'full_name': call.receiver.full_name or '',
             }
 
         return data
