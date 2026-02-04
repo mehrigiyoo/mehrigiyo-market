@@ -9,8 +9,6 @@ from rest_framework.permissions import IsAuthenticated
 from .models import StreamChat, StreamReaction
 from .serializers import StreamChatSerializer
 
-
-
 from .models import LiveStream, StreamViewer
 from .serializers import (
     LiveStreamSerializer, LiveStreamListSerializer,
@@ -27,13 +25,13 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
 
     Endpoints:
     - GET    /api/streams/           - List streams
-    - POST   /api/streams/           - Create stream
+    - POST   /api/streams/           - Create stream (DOCTOR ONLY)
     - GET    /api/streams/{id}/      - Stream detail
-    - PATCH  /api/streams/{id}/      - Update stream
-    - DELETE /api/streams/{id}/      - Delete/Cancel stream
+    - PATCH  /api/streams/{id}/      - Update stream (DOCTOR ONLY)
+    - DELETE /api/streams/{id}/      - Delete/Cancel stream (DOCTOR ONLY)
 
-    - POST   /api/streams/{id}/start/      - Start stream (host)
-    - POST   /api/streams/{id}/end/        - End stream (host)
+    - POST   /api/streams/{id}/start/      - Start stream (DOCTOR ONLY)
+    - POST   /api/streams/{id}/end/        - End stream (DOCTOR ONLY)
     - POST   /api/streams/{id}/join/       - Join stream (viewer)
     - POST   /api/streams/{id}/leave/      - Leave stream
 
@@ -60,7 +58,7 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
 
     def create(self, request):
         """
-        Create new stream
+        Create new stream (DOCTOR ONLY)
 
         POST /api/streams/
         {
@@ -69,6 +67,16 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
             "scheduled_at": "2026-02-01T10:00:00Z" (optional)
         }
         """
+        # ✅ DOCTOR CHECK
+        if not self._is_doctor(request.user):
+            return Response(
+                {
+                    'error': 'Faqat shifokorlar stream yarata oladi',
+                    'error_code': 'NOT_DOCTOR'
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         serializer = LiveStreamCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -107,14 +115,85 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
 
         return Response(response_data, status=status.HTTP_201_CREATED)
 
+    def update(self, request, *args, **kwargs):
+        """Update stream (DOCTOR ONLY)"""
+        stream = self.get_object()
+
+        # ✅ DOCTOR CHECK
+        if not self._is_doctor(request.user):
+            return Response(
+                {
+                    'error': 'Faqat shifokorlar stream tahrirlashi mumkin',
+                    'error_code': 'NOT_DOCTOR'
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # ✅ HOST CHECK
+        if stream.host != request.user:
+            return Response(
+                {
+                    'error': 'Faqat stream egasi tahrirlashi mumkin',
+                    'error_code': 'NOT_HOST'
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        """Partial update stream (DOCTOR ONLY)"""
+        return self.update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        """Delete/Cancel stream (DOCTOR ONLY)"""
+        stream = self.get_object()
+
+        # ✅ DOCTOR CHECK
+        if not self._is_doctor(request.user):
+            return Response(
+                {
+                    'error': 'Faqat shifokorlar stream o\'chirishi mumkin',
+                    'error_code': 'NOT_DOCTOR'
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # ✅ HOST CHECK
+        if stream.host != request.user:
+            return Response(
+                {
+                    'error': 'Faqat stream egasi o\'chirishi mumkin',
+                    'error_code': 'NOT_HOST'
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # If live, end it first
+        if stream.status == 'live':
+            stream.end_stream()
+            livekit_stream_service.delete_room(stream.livekit_room_name)
+
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):
         """
-        Start stream (for scheduled streams)
+        Start stream (for scheduled streams) - DOCTOR ONLY
 
         POST /api/streams/{id}/start/
         """
         stream = self.get_object()
+
+        # ✅ DOCTOR CHECK
+        if not self._is_doctor(request.user):
+            return Response(
+                {
+                    'error': 'Faqat shifokorlar stream boshlashi mumkin',
+                    'error_code': 'NOT_DOCTOR'
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         # Permission check
         if stream.host != request.user:
@@ -149,8 +228,18 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def end(self, request, pk=None):
-        """End stream"""
+        """End stream - DOCTOR ONLY"""
         stream = self.get_object()
+
+        # ✅ DOCTOR CHECK
+        if not self._is_doctor(request.user):
+            return Response(
+                {
+                    'error': 'Faqat shifokorlar stream tugatishi mumkin',
+                    'error_code': 'NOT_DOCTOR'
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         if stream.host != request.user:
             return Response(
@@ -164,7 +253,7 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
         # Delete LiveKit room
         livekit_stream_service.delete_room(stream.livekit_room_name)
 
-        # NEW: Broadcast stream ended via WebSocket
+        # Broadcast stream ended via WebSocket
         from channels.layers import get_channel_layer
         from asgiref.sync import async_to_sync
 
@@ -192,7 +281,7 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def join(self, request, pk=None):
         """
-        Join stream as viewer
+        Join stream as viewer (ANYONE can join)
 
         POST /api/streams/{id}/join/
         {
@@ -244,7 +333,7 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def leave(self, request, pk=None):
         """
-        Leave stream
+        Leave stream (ANYONE can leave)
 
         POST /api/streams/{id}/leave/
         """
@@ -274,7 +363,7 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def live(self, request):
         """
-        Get currently live streams
+        Get currently live streams (ANYONE can view)
 
         GET /api/streams/live/
         """
@@ -288,7 +377,7 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def scheduled(self, request):
         """
-        Get scheduled streams
+        Get scheduled streams (ANYONE can view)
 
         GET /api/streams/scheduled/
         """
@@ -303,10 +392,20 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def my_streams(self, request):
         """
-        Get user's hosted streams
+        Get user's hosted streams (DOCTOR ONLY)
 
         GET /api/streams/my_streams/
         """
+        # ✅ DOCTOR CHECK
+        if not self._is_doctor(request.user):
+            return Response(
+                {
+                    'error': 'Faqat shifokorlar o\'z streamlarini ko\'rishi mumkin',
+                    'error_code': 'NOT_DOCTOR'
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         streams = LiveStream.objects.filter(
             host=request.user
         ).order_by('-created_at')
@@ -314,6 +413,28 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
         serializer = LiveStreamListSerializer(streams, many=True)
         return Response(serializer.data)
 
+    # ✅ HELPER METHOD
+    def _is_doctor(self, user):
+        """
+        Check if user is a doctor
+
+        Sizning User modelingizda role field bor deb taxmin qilyapman.
+        Agar boshqacha bo'lsa, o'zgartirib oling.
+        """
+        # Variant 1: Role field orqali
+        if hasattr(user, 'role'):
+            return user.role == 'doctor'  # yoki UserModel.Roles.DOCTOR
+
+        # Variant 2: is_doctor flag orqali
+        if hasattr(user, 'is_doctor'):
+            return user.is_doctor
+
+        # Variant 3: DoctorProfile orqali
+        if hasattr(user, 'doctor_profile'):
+            return hasattr(user, 'doctor_profile') and user.doctor_profile is not None
+
+        # Default: False (agar hech narsa topilmasa)
+        return False
 
 
 class StreamChatViewSet(viewsets.ReadOnlyModelViewSet):
