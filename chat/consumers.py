@@ -7,16 +7,23 @@ from django.conf import settings
 from utils.fcm import send_fcm
 from .models import ChatRoom, Message
 
+
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.room_id = self.scope['url_route']['kwargs']['room_id']
         self.room_group_name = f'chat_{self.room_id}'
         self.user = self.scope['user']
 
+        # ✅ User ID saqlab qo'yish (disconnect uchun)
+        self.user_id = None
+
         # Anonymous user reject
         if self.user.is_anonymous:
             await self.close(code=4001)
             return
+
+        # ✅ User ID ni saqlash
+        self.user_id = self.user.id
 
         # Room access tekshirish
         has_access = await self.check_room_access()
@@ -32,8 +39,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         await self.accept()
 
-        # ✅ CHAT HISTORY YUBORISH
-        await self.send_chat_history()
+        # ✅ COMBINED CHAT + CALL HISTORY YUBORISH
+        await self.send_combined_history()
 
         # User online status
         await self.channel_layer.group_send(
@@ -46,13 +53,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
         )
 
     async def disconnect(self, close_code):
-        if hasattr(self, 'room_group_name'):
+        if hasattr(self, 'room_group_name') and hasattr(self, 'user_id') and self.user_id:
             # User offline status
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
                     'type': 'user_status',
-                    'user_id': self.user.id,
+                    'user_id': self.user_id,
                     'status': 'offline'
                 }
             )
@@ -162,28 +169,32 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 }
             )
 
-    async def send_chat_history(self):
-        """Oxirgi 50 ta xabarni yuborish"""
-        messages = await self.get_recent_messages(limit=50)
-        has_more = await self.has_more_messages()
+    # ✅ NEW: Combined history (messages + calls)
+    async def send_combined_history(self):
+        """
+        Chat history + Call history ni aralash yuborish
+        Telegram kabi - hammasi bitta listda
+        """
+        items = await self.get_combined_history(limit=50)
+        has_more = await self.has_more_history()
 
         await self.send(text_data=json.dumps({
             'type': 'chat_history',
-            'messages': messages,
+            'items': items,  # ← messages va calls aralash
             'has_more': has_more
         }))
 
     async def handle_load_more(self, data):
-        """Ko'proq xabarlar yuklash"""
-        before_id = data.get('before_id')
+        """Ko'proq history yuklash (messages + calls)"""
+        before_timestamp = data.get('before_timestamp')
         limit = data.get('limit', 50)
 
-        messages = await self.get_messages_before(before_id, limit)
-        has_more = await self.has_messages_before(before_id, limit)
+        items = await self.get_history_before(before_timestamp, limit)
+        has_more = await self.has_history_before(before_timestamp, limit)
 
         await self.send(text_data=json.dumps({
             'type': 'load_more_response',
-            'messages': messages,
+            'items': items,
             'has_more': has_more
         }))
 
@@ -296,6 +307,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         data = {
             'id': message.id,
+            'item_type': 'message',  # ← Item type qo'shamiz
             'room': message.room.id,
             'sender': {
                 'id': message.sender.id,
@@ -310,6 +322,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'read_at': message.read_at.isoformat() if message.read_at else None,
             'created_at': message.created_at.isoformat(),
             'updated_at': message.updated_at.isoformat(),
+            'timestamp': message.created_at.timestamp(),  # ← Sorting uchun
             'is_mine': message.sender.id == self.user.id,
             'attachments': [],
             'reply_to': None
@@ -351,52 +364,163 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         return data
 
+    def _call_to_dict(self, call):
+        """
+        Call obyektini dict ga aylantirish
+        Telegram call history formatida
+        """
+        data = {
+            'id': call.id,
+            'item_type': 'call',  # ← Item type
+            'room': call.room.id,
+            'caller': {
+                'id': call.caller.id,
+                'phone': call.caller.phone,
+                'first_name': call.caller.first_name or '',
+                'last_name': call.caller.last_name or '',
+            },
+            'call_type': call.call_type,  # audio / video
+            'status': call.status,  # ended / missed / rejected
+            'duration': call.duration,  # seconds
+            'started_at': call.started_at.isoformat() if call.started_at else None,
+            'ended_at': call.ended_at.isoformat() if call.ended_at else None,
+            'created_at': call.created_at.isoformat(),
+            'timestamp': call.created_at.timestamp(),  # ← Sorting uchun
+            'is_mine': call.caller.id == self.user.id,  # ← Men qilgan call mi?
+        }
+
+        # Answerer (agar javob berilgan bo'lsa)
+        if call.answerer:
+            data['answerer'] = {
+                'id': call.answerer.id,
+                'phone': call.answerer.phone,
+                'first_name': call.answerer.first_name or '',
+                'last_name': call.answerer.last_name or '',
+            }
+
+        return data
+
     @database_sync_to_async
-    def get_recent_messages(self, limit=50):
-        """Oxirgi xabarlarni olish"""
-        messages = Message.objects.filter(
+    def get_combined_history(self, limit=50):
+        """
+        Messages va Calls ni birga olib, vaqt bo'yicha sort qilish
+        ✅ Telegram style
+        """
+        from call.models import Call  # Call modelingiz
+
+        # Messages olish
+        messages = list(Message.objects.filter(
             room_id=self.room_id
         ).select_related(
             'sender', 'reply_to__sender'
         ).prefetch_related(
             'attachments'
-        ).order_by('-created_at')[:limit]
+        ).order_by('-created_at')[:limit])
 
-        # Reverse (eskidan yangiga)
-        messages = list(reversed(messages))
-
-        # Manual serialization
-        return [self._message_to_dict(msg) for msg in messages]
-
-    @database_sync_to_async
-    def has_more_messages(self):
-        """Qo'shimcha xabarlar bormi"""
-        count = Message.objects.filter(room_id=self.room_id).count()
-        return count > 50
-
-    @database_sync_to_async
-    def get_messages_before(self, before_id, limit=50):
-        """before_id dan oldingi xabarlar"""
-        messages = Message.objects.filter(
+        # Calls olish (faqat finished calls)
+        calls = list(Call.objects.filter(
             room_id=self.room_id,
-            id__lt=before_id
+            status__in=['ended', 'missed', 'rejected']
+        ).select_related(
+            'caller', 'answerer'
+        ).order_by('-created_at')[:limit])
+
+        # Convert to dict
+        message_dicts = [self._message_to_dict(msg) for msg in messages]
+        call_dicts = [self._call_to_dict(call) for call in calls]
+
+        # Combine
+        all_items = message_dicts + call_dicts
+
+        # Sort by timestamp (yangidan eskiga)
+        all_items.sort(key=lambda x: x['timestamp'], reverse=True)
+
+        # Limit
+        all_items = all_items[:limit]
+
+        # Reverse (eskidan yangiga - chat uchun)
+        all_items = list(reversed(all_items))
+
+        return all_items
+
+    @database_sync_to_async
+    def has_more_history(self):
+        """Qo'shimcha history bormi (messages + calls)"""
+        from call.models import Call
+
+        message_count = Message.objects.filter(room_id=self.room_id).count()
+        call_count = Call.objects.filter(
+            room_id=self.room_id,
+            status__in=['ended', 'missed', 'rejected']
+        ).count()
+
+        total = message_count + call_count
+        return total > 50
+
+    @database_sync_to_async
+    def get_history_before(self, before_timestamp, limit=50):
+        """
+        before_timestamp dan oldingi history
+        (messages + calls combined)
+        """
+        from call.models import Call
+        from datetime import datetime
+
+        # Timestamp to datetime
+        before_dt = datetime.fromtimestamp(float(before_timestamp))
+
+        # Messages
+        messages = list(Message.objects.filter(
+            room_id=self.room_id,
+            created_at__lt=before_dt
         ).select_related(
             'sender', 'reply_to__sender'
         ).prefetch_related(
             'attachments'
-        ).order_by('-created_at')[:limit]
+        ).order_by('-created_at')[:limit])
 
-        messages = list(reversed(messages))
-        return [self._message_to_dict(msg) for msg in messages]
+        # Calls
+        calls = list(Call.objects.filter(
+            room_id=self.room_id,
+            status__in=['ended', 'missed', 'rejected'],
+            created_at__lt=before_dt
+        ).select_related(
+            'caller', 'answerer'
+        ).order_by('-created_at')[:limit])
+
+        # Convert
+        message_dicts = [self._message_to_dict(msg) for msg in messages]
+        call_dicts = [self._call_to_dict(call) for call in calls]
+
+        # Combine and sort
+        all_items = message_dicts + call_dicts
+        all_items.sort(key=lambda x: x['timestamp'], reverse=True)
+        all_items = all_items[:limit]
+        all_items = list(reversed(all_items))
+
+        return all_items
 
     @database_sync_to_async
-    def has_messages_before(self, before_id, limit=50):
-        """Yana xabarlar bormi"""
-        count = Message.objects.filter(
+    def has_history_before(self, before_timestamp, limit=50):
+        """Yana history bormi"""
+        from call.models import Call
+        from datetime import datetime
+
+        before_dt = datetime.fromtimestamp(float(before_timestamp))
+
+        message_count = Message.objects.filter(
             room_id=self.room_id,
-            id__lt=before_id
+            created_at__lt=before_dt
         ).count()
-        return count > limit
+
+        call_count = Call.objects.filter(
+            room_id=self.room_id,
+            status__in=['ended', 'missed', 'rejected'],
+            created_at__lt=before_dt
+        ).count()
+
+        total = message_count + call_count
+        return total > limit
 
     @database_sync_to_async
     def mark_message_read(self, message_id):
@@ -411,11 +535,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             pass
         return False
 
-
-
-# CALL
-
-
+    # CALL EVENT HANDLERS (avvalgidek)
     async def call_incoming(self, event):
         """Incoming call notification"""
         await self.send(text_data=json.dumps({
@@ -428,7 +548,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'livekit_ws_url': event['livekit_ws_url'],
         }))
 
-
     async def call_answered(self, event):
         """Call answered notification"""
         await self.send(text_data=json.dumps({
@@ -437,14 +556,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'answerer': event.get('answerer', {}),
         }))
 
-
     async def call_rejected(self, event):
         """Call rejected notification"""
         await self.send(text_data=json.dumps({
             'type': 'call_rejected',
             'call_id': event['call_id'],
         }))
-
 
     async def call_ended(self, event):
         """Call ended notification"""
@@ -454,14 +571,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'duration': event.get('duration', 0),
         }))
 
-
     async def call_cancelled(self, event):
         """Call cancelled notification"""
         await self.send(text_data=json.dumps({
             'type': 'call_cancelled',
             'call_id': event['call_id'],
         }))
-
 
     async def call_missed(self, event):
         """Call missed notification"""
