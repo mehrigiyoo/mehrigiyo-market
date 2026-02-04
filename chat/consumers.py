@@ -364,39 +364,60 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         return data
 
-    def _call_to_dict(self, call):
+    def get_user_display_info(self, user):
         """
-        Call obyektini dict ga aylantirish
-        Telegram call history formatida
+        User uchun display ma'lumotlar:
+        ClientProfile yoki DoctorProfile dan oladi
         """
-        data = {
-            'id': call.id,
-            'item_type': 'call',  # ← Item type
-            'room': call.room.id,
-            'caller': {
-                'id': call.caller.id,
-                'phone': call.caller.phone,
-                'first_name': call.caller.first_name or '',
-                'last_name': call.caller.last_name or '',
-            },
-            'call_type': call.call_type,  # audio / video
-            'status': call.status,  # ended / missed / rejected
-            'duration': call.duration,  # seconds
-            'started_at': call.answered_at.isoformat() if call.answered_at else None,
-            'ended_at': call.ended_at.isoformat() if call.ended_at else None,
-            'created_at': call.created_at.isoformat(),
-            'timestamp': call.created_at.timestamp(),  # ← Sorting uchun
-            'is_mine': call.caller.id == self.user.id,  # ← Men qilgan call mi?
+        first_name = ''
+        last_name = ''
+        full_name = ''
+        gender = None
+
+        if hasattr(user, 'client_profile'):
+            full_name = user.client_profile.full_name or ''
+            gender = user.client_profile.gender
+
+        elif hasattr(user, 'doctor_profile'):
+            full_name = user.doctor_profile.full_name or ''
+            gender = user.doctor_profile.gender
+
+        # Agar full_name bor bo‘lsa, bo‘lib yuboramiz
+        if full_name:
+            parts = full_name.split(' ', 1)
+            first_name = parts[0]
+            last_name = parts[1] if len(parts) > 1 else ''
+
+        return {
+            'id': user.id,
+            'phone': user.phone,
+            'first_name': first_name,
+            'last_name': last_name,
+            'full_name': full_name,
+            'gender': gender,
         }
 
-        # Receiver (agar javob berilgan bo'lsa)
-        if call.receiver:
-            data['receiver'] = {
-                'id': call.receiver.id,
-                'phone': call.receiver.phone,
-                'first_name': call.receiver.first_name or '',
-                'last_name': call.receiver.last_name or '',
-            }
+    def _call_to_dict(self, call):
+        data = {
+            'id': call.id,
+            'item_type': 'call',
+            'room': call.room.id,
+
+            'caller': self.get_user_display_info(call.caller),
+            'receiver': self.get_user_display_info(call.receiver) if call.receiver else None,
+
+            'call_type': call.call_type,
+            'status': call.status,
+            'duration': call.duration,
+
+            'started_at': call.answered_at.isoformat() if call.answered_at else None,
+            'ended_at': call.ended_at.isoformat() if call.ended_at else None,
+
+            'created_at': call.created_at.isoformat(),
+            'timestamp': call.created_at.timestamp(),
+
+            'is_mine': call.caller_id == self.user.id,
+        }
 
         return data
 
