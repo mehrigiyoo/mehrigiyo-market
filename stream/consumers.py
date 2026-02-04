@@ -28,13 +28,27 @@ class LiveStreamConsumer(AsyncWebsocketConsumer):
         # Get user from scope (JWT authentication)
         self.user = self.scope.get('user')
 
+        # ✅ FIX: User ID ni saqlab qo'yamiz (disconnect uchun)
+        self.user_id = None
+        self.is_viewer_added = False  # ← Track qilish uchun
+
         if not self.user or not self.user.is_authenticated:
+            logger.warning(f"Unauthenticated connection attempt to stream {self.stream_id}")
             await self.close()
             return
 
+        # ✅ User ID ni saqlash
+        self.user_id = self.user.id
+
         # Streamni DBdan olish
         stream = await self.get_stream()
-        if not stream or not stream.is_live:
+        if not stream:
+            logger.warning(f"Stream {self.stream_id} not found")
+            await self.close()
+            return
+
+        if not stream.is_live:
+            logger.info(f"Stream {self.stream_id} is not live")
             await self.close()
             return
 
@@ -46,29 +60,35 @@ class LiveStreamConsumer(AsyncWebsocketConsumer):
 
         await self.accept()
 
+        # ✅ Viewer qo'shish va flag o'rnatish
         if stream.is_live:
             await self.add_viewer()
+            self.is_viewer_added = True  # ← Flag
             await self.send_viewer_count()
 
         logger.info(f"User {self.user.id} connected to stream {self.stream_id}")
 
     async def disconnect(self, close_code):
         """Handle WebSocket disconnect"""
+
+        # ✅ FIX: User va user_id mavjudligini tekshirish
+        if not hasattr(self, 'user_id') or not self.user_id:
+            logger.warning(f"Disconnect without user_id for stream {self.stream_id}")
+            return
+
         # Leave stream group
         await self.channel_layer.group_discard(
             self.stream_group_name,
             self.channel_name
         )
 
-        # Streamni olish
-        stream = await self.get_stream()
-
-        # Faqat live stream uchun viewer update qilish
-        if stream and stream.is_live:
+        # ✅ FIX: Faqat viewer qo'shilgan bo'lsa, olib tashlash
+        if hasattr(self, 'is_viewer_added') and self.is_viewer_added:
             await self.remove_viewer()
             await self.send_viewer_count()
-
-        logger.info(f"User {self.user.id} disconnected from stream {self.stream_id}")
+            logger.info(f"User {self.user_id} removed from stream {self.stream_id} (viewers updated)")
+        else:
+            logger.info(f"User {self.user_id} disconnected from stream {self.stream_id} (no viewer update)")
 
     async def receive(self, text_data):
         """
@@ -117,7 +137,7 @@ class LiveStreamConsumer(AsyncWebsocketConsumer):
         # Check if chat enabled
         stream = await self.get_stream()
 
-        # Faqat live stream va chat enabled bo‘lsa davom etadi
+        # Faqat live stream va chat enabled bo'lsa davom etadi
         if not stream or not stream.chat_enabled or not stream.is_live:
             await self.send(text_data=json.dumps({
                 'type': 'error',
@@ -174,7 +194,6 @@ class LiveStreamConsumer(AsyncWebsocketConsumer):
                 'user_id': self.user.id,
             }
         )
-
 
     # BROADCAST HANDLERS
     async def stream_message(self, event):
@@ -275,7 +294,7 @@ class LiveStreamConsumer(AsyncWebsocketConsumer):
 
         try:
             stream = LiveStream.objects.get(id=self.stream_id)
-            stream.add_viewer(self.user.id)
+            stream.add_viewer(self.user_id)
 
             # Create viewer record
             StreamViewer.objects.get_or_create(
@@ -285,6 +304,8 @@ class LiveStreamConsumer(AsyncWebsocketConsumer):
                 defaults={'device_type': 'web'}
             )
 
+            logger.info(f"Viewer added: user_id={self.user_id}, stream_id={self.stream_id}")
+
         except Exception as e:
             logger.error(f"Error adding viewer: {e}")
 
@@ -292,21 +313,37 @@ class LiveStreamConsumer(AsyncWebsocketConsumer):
     def remove_viewer(self):
         """Remove viewer from stream"""
         from .models import LiveStream, StreamViewer
+        from django.contrib.auth import get_user_model
+
+        UserModel = get_user_model()
 
         try:
             stream = LiveStream.objects.get(id=self.stream_id)
-            stream.remove_viewer(self.user.id)
+
+            # ✅ FIX: user_id orqali olib tashlash (self.user emas!)
+            stream.remove_viewer(self.user_id)
+
+            # ✅ User obyektini olish
+            try:
+                user = UserModel.objects.get(id=self.user_id)
+            except UserModel.DoesNotExist:
+                logger.error(f"User {self.user_id} not found")
+                return
 
             # Update viewer record
             viewer = StreamViewer.objects.filter(
                 stream=stream,
-                user=self.user,
+                user=user,
                 left_at__isnull=True
             ).first()
 
             if viewer:
                 viewer.left_at = timezone.now()
                 viewer.calculate_watch_duration()
+                logger.info(
+                    f"Viewer removed: user_id={self.user_id}, stream_id={self.stream_id}, duration={viewer.watch_duration}s")
+            else:
+                logger.warning(f"Active viewer record not found: user_id={self.user_id}, stream_id={self.stream_id}")
 
         except Exception as e:
             logger.error(f"Error removing viewer: {e}")
@@ -318,8 +355,11 @@ class LiveStreamConsumer(AsyncWebsocketConsumer):
 
         try:
             stream = LiveStream.objects.get(id=self.stream_id)
-            return stream.get_active_viewers()
-        except:
+            count = stream.get_active_viewers()
+            logger.debug(f"Stream {self.stream_id} viewer count: {count}")
+            return count
+        except Exception as e:
+            logger.error(f"Error getting viewer count: {e}")
             return 0
 
     async def send_viewer_count(self):
