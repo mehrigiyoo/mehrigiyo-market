@@ -376,7 +376,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'caller': {
                 'id': call.caller.id,
                 'phone': call.caller.phone,
-                'full_name': call.caller.full_name or '',
+                'first_name': call.caller.first_name or '',
+                'last_name': call.caller.last_name or '',
             },
             'call_type': call.call_type,  # audio / video
             'status': call.status,  # ended / missed / rejected
@@ -393,7 +394,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             data['receiver'] = {
                 'id': call.receiver.id,
                 'phone': call.receiver.phone,
-                'full_name': call.receiver.full_name or '',
+                'first_name': call.receiver.first_name or '',
+                'last_name': call.receiver.last_name or '',
             }
 
         return data
