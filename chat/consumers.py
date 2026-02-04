@@ -14,7 +14,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.room_group_name = f'chat_{self.room_id}'
         self.user = self.scope['user']
 
-        # ✅ User ID saqlab qo'yish (disconnect uchun)
+        # User ID saqlab qo'yish (disconnect uchun)
         self.user_id = None
 
         # Anonymous user reject
@@ -22,7 +22,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.close(code=4001)
             return
 
-        # ✅ User ID ni saqlash
+        # User ID ni saqlash
         self.user_id = self.user.id
 
         # Room access tekshirish
@@ -39,7 +39,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         await self.accept()
 
-        # ✅ COMBINED CHAT + CALL HISTORY YUBORISH
+        # COMBINED CHAT + CALL HISTORY YUBORISH
         await self.send_combined_history()
 
         # User online status
@@ -103,7 +103,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 }
             )
 
-            # ✅ Send FCM to other user
+            # Send FCM to other user
             await self.send_fcm_notification(message)
 
     async def send_fcm_notification(self, message):
@@ -169,7 +169,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 }
             )
 
-    # ✅ NEW: Combined history (messages + calls)
+    #  Combined history (messages + calls)
     async def send_combined_history(self):
         """
         Chat history + Call history ni aralash yuborish
@@ -301,7 +301,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     def _message_to_dict(self, message):
         """
         Message obyektini dict ga aylantirish
-        ✅ ABSOLUTE URLs bilan
+        ABSOLUTE URLs bilan
         """
         base_url = self._get_base_url()
 
@@ -328,7 +328,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'reply_to': None
         }
 
-        # ✅ Attachments with ABSOLUTE URLs
+        # Attachments with ABSOLUTE URLs
         for att in message.attachments.all():
             file_url = None
             thumbnail_url = None
@@ -389,13 +389,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'is_mine': call.caller.id == self.user.id,  # ← Men qilgan call mi?
         }
 
-        # Answerer (agar javob berilgan bo'lsa)
-        if call.answerer:
-            data['answerer'] = {
-                'id': call.answerer.id,
-                'phone': call.answerer.phone,
-                'first_name': call.answerer.first_name or '',
-                'last_name': call.answerer.last_name or '',
+        # Receiver (agar javob berilgan bo'lsa)
+        if call.receiver:
+            data['receiver'] = {
+                'id': call.receiver.id,
+                'phone': call.receiver.phone,
+                'first_name': call.receiver.first_name or '',
+                'last_name': call.receiver.last_name or '',
             }
 
         return data
@@ -404,7 +404,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
     def get_combined_history(self, limit=50):
         """
         Messages va Calls ni birga olib, vaqt bo'yicha sort qilish
-        ✅ Telegram style
         """
         from call.models import Call  # Call modelingiz
 
@@ -422,7 +421,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             room_id=self.room_id,
             status__in=['ended', 'missed', 'rejected']
         ).select_related(
-            'caller', 'answerer'
+            'caller', 'receiver'
         ).order_by('-created_at')[:limit])
 
         # Convert to dict
@@ -485,7 +484,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             status__in=['ended', 'missed', 'rejected'],
             created_at__lt=before_dt
         ).select_related(
-            'caller', 'answerer'
+            'caller', 'receiver'
         ).order_by('-created_at')[:limit])
 
         # Convert
