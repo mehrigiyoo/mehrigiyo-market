@@ -5,8 +5,9 @@ from django.db.utils import IntegrityError
 from django.db.models import Count, Avg, Prefetch
 from django.utils import timezone
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.generics import RetrieveUpdateAPIView
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
@@ -22,7 +23,7 @@ from .serializers import TypeDoctorSerializer, AdvertisingSerializer, \
     DoctorUnavailableSerializer, WorkScheduleSerializer, DoctorProfileSerializer, \
     DoctorRegisterSerializer, DoctorListSerializer, DoctorDetailSerializer, DoctorRatingSerializer, \
     ConsultationDetailSerializer
-from .models import Doctor, TypeDoctor, Advertising, AdviceTime, DoctorUnavailable, WorkSchedule, DoctorView, RateDoctor
+from .models import Doctor, TypeDoctor, Advertising, AdviceTime, DoctorUnavailable, WorkSchedule, DoctorView
 from .services import create_advice_service
 from django.contrib.auth import get_user_model
 UserModel = get_user_model()
@@ -48,6 +49,64 @@ class TypeDoctorListAPI(generics.ListAPIView):
             doctors_count=Count('doctor', filter=models.Q(doctor__is_verified=True))
         )
 
+
+class DoctorPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 50
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_doctors_by_type_paginated(request, type_id):
+    """
+    Type ID bo'yicha doctorlarni olish (paginated)
+
+    GET /api/doctors/by-type/{type_id}/?page=1&page_size=10
+    """
+    try:
+        doctor_type = TypeDoctor.objects.get(id=type_id)
+    except TypeDoctor.DoesNotExist:
+        return Response(
+            {'error': 'Doctor type not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    doctors = Doctor.objects.filter(
+        type_doctor=doctor_type,
+        is_verified=True,
+        user__is_approved=True,
+        user__is_active=True
+    ).select_related(
+        'user',
+        'type_doctor'
+    ).order_by('-average_rating', '-view_count')
+
+    # Pagination
+    paginator = DoctorPagination()
+    page = paginator.paginate_queryset(doctors, request)
+
+    if page is not None:
+        serializer = DoctorListSerializer(page, many=True, context={'request': request})
+        return paginator.get_paginated_response({
+            'type': {
+                'id': doctor_type.id,
+                'name': doctor_type.name,
+            },
+            'total_count': doctors.count(),
+            'results': serializer.data
+        })
+
+    # Agar pagination yo'q bo'lsa
+    serializer = DoctorListSerializer(doctors, many=True, context={'request': request})
+    return Response({
+        'type': {
+            'id': doctor_type.id,
+            'name': doctor_type.name,
+        },
+        'count': doctors.count(),
+        'doctors': serializer.data
+    })
 
 
 class DoctorProfileView(RetrieveUpdateAPIView):

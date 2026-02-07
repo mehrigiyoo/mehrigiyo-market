@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (TypeDoctorListAPI,
                     AdvertisingView, GenderStatisticsView, AvailableSlotsView, BookAdviceView, WorkScheduleViewSet,
                     DoctorUnavailableViewSet, DoctorProfileView, DoctorRegisterView, DoctorListAPI, DoctorDetailAPI,
-                    DoctorRatingCreateAPI)
+                    DoctorRatingCreateAPI, get_doctors_by_type_paginated)
 router = DefaultRouter()
 # router.register(r'types', TypeDoctorListAPI)
 router.register(r'work-schedules', WorkScheduleViewSet, basename='work-schedules')
@@ -19,6 +19,7 @@ urlpatterns = [
 
 
     path('types/', TypeDoctorListAPI.as_view(), name='type-doctor-list'),
+    path('doctors/by-type/<int:type_id>/', get_doctors_by_type_paginated, name='doctors-by-type'),
     path('doctors/', DoctorListAPI.as_view(), name='doctor-list'),
     path('doctor/<int:id>/', DoctorDetailAPI.as_view(), name='doctor-detail'),
     path('doctor/rate/', DoctorRatingCreateAPI.as_view(), name='doctor-rate'),
