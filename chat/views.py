@@ -5,9 +5,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
-from django.db.models import Q, Prefetch, Count, Max
+from django.db.models import Max
 from django.utils import timezone
-from .models import ChatRoom, Message, MessageAttachment
+from .models import ChatRoom, Message
 from .serializers import (
     ChatRoomSerializer, ChatRoomCreateSerializer,
     MessageSerializer, MessageCreateSerializer
@@ -58,7 +58,16 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        messages = room.messages.select_related('sender').prefetch_related('attachments', 'reply_to__sender')
+        messages = room.messages.select_related(
+            'sender',
+            'sender__client_profile',  # Client uchun
+            'sender__doctor',  # Doctor uchun
+        ).prefetch_related(
+            'attachments',
+            'reply_to__sender',
+            'reply_to__sender__client_profile',
+            'reply_to__sender__doctor'
+        )
 
         paginator = MessagePagination()
         page = paginator.paginate_queryset(messages, request)
@@ -112,7 +121,12 @@ class MessageViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Message.objects.filter(
             room__participants=self.request.user
-        ).select_related('sender', 'room').prefetch_related('attachments')
+        ).select_related(
+            'sender',
+            'sender__client_profile',
+            'sender__doctor',
+            'room'
+        ).prefetch_related('attachments')
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -145,19 +159,56 @@ class MessageViewSet(viewsets.ModelViewSet):
 
         return Response(message_data, status=status.HTTP_201_CREATED)
 
+    def _get_user_full_name(self, user):
+        """
+        User ning to'liq ismini olish
+
+        Priority:
+        - Client: client_profile.full_name
+        - Doctor: doctor.full_name
+        - Fallback: phone
+        """
+        # Client
+        if hasattr(user, 'client_profile'):
+            try:
+                full_name = (user.client_profile.full_name or '').strip()
+                if full_name:
+                    return full_name
+            except:
+                pass
+
+        # Doctor
+        if hasattr(user, 'doctor'):
+            try:
+                full_name = (user.doctor.full_name or '').strip()
+                if full_name:
+                    return full_name
+            except:
+                pass
+
+        # Fallback
+        return user.phone or ''
+
     def _prepare_message_data(self, message, request):
         """
         Message obyektini dict ga aylantirish
         ABSOLUTE URLs bilan
+
+         IMPORTANT: Keys saqlanadi (first_name, last_name)
+         Value full_name dan olinadi
+         Flutter kodlari buzilmaydi
         """
+        # Sender full_name olish
+        sender_full_name = self._get_user_full_name(message.sender)
+
         data = {
             'id': message.id,
             'room': message.room.id,
             'sender': {
                 'id': message.sender.id,
                 'phone': message.sender.phone,
-                'first_name': message.sender.first_name or '',
-                'last_name': message.sender.last_name or '',
+                'first_name': sender_full_name,  # Key o'zgarmadi, value full_name
+                'last_name': '',  # Key o'zgarmadi, bo'sh string
                 'role': message.sender.role,
             },
             'message_type': message.message_type,
@@ -171,7 +222,7 @@ class MessageViewSet(viewsets.ModelViewSet):
             'reply_to': None
         }
 
-        # ✅ Attachments with ABSOLUTE URLs
+        # Attachments with ABSOLUTE URLs
         for att in message.attachments.all():
             attachment_data = {
                 'id': att.id,
@@ -186,12 +237,15 @@ class MessageViewSet(viewsets.ModelViewSet):
 
         # Reply to
         if message.reply_to:
+            # Reply sender full_name
+            reply_sender_full_name = self._get_user_full_name(message.reply_to.sender)
+
             data['reply_to'] = {
                 'id': message.reply_to.id,
                 'sender': {
                     'id': message.reply_to.sender.id,
                     'phone': message.reply_to.sender.phone,
-                    'first_name': message.reply_to.sender.first_name or '',
+                    'first_name': reply_sender_full_name,  # Key o'zgarmadi
                 },
                 'text': message.reply_to.text[:100] if message.reply_to.text else '',
                 'message_type': message.reply_to.message_type,
@@ -245,128 +299,6 @@ class DoctorChatRoomViewSet(viewsets.ReadOnlyModelViewSet):
             room_type='1:1',
             participants=user
         ).prefetch_related('participants').order_by('-updated_at')
-
-    # def list(self, request):
-    #     """
-    #     Doctor's chat roomlar ro'yxati
-    #
-    #     GET /api/doctor/chat-rooms/
-    #     """
-    #     queryset = self.get_queryset()
-    #
-    #     rooms_data = []
-    #     for room in queryset:
-    #         # Ikkinchi participant (client)
-    #         other_participant = room.participants.exclude(id=request.user.id).first()
-    #
-    #         if other_participant:
-    #             rooms_data.append({
-    #                 'id': room.id,
-    #                 'is_active': room.is_active,
-    #                 'client': {
-    #                     'id': other_participant.id,
-    #                     'name': f"{other_participant.first_name or ''} {other_participant.last_name or ''}".strip() or other_participant.phone,
-    #                     'phone': other_participant.phone,
-    #                 },
-    #                 'last_message': room.last_message_text,
-    #                 'last_message_time': room.last_message_time,
-    #                 'created_at': room.created_at,
-    #                 'updated_at': room.updated_at,
-    #             })
-    #
-    #     return Response({
-    #         'count': len(rooms_data),
-    #         'results': rooms_data
-    #     })
-
-    # def retrieve(self, request, pk=None):
-    #     """
-    #     Chat room detail
-    #
-    #     GET /api/doctor/chat-rooms/{id}/
-    #     """
-    #     room = self.get_object()
-    #
-    #     # Ikkinchi participant
-    #     other_participant = room.participants.exclude(id=request.user.id).first()
-    #
-    #     return Response({
-    #         'id': room.id,
-    #         'is_active': room.is_active,
-    #         'room_type': room.room_type,
-    #         'client': {
-    #             'id': other_participant.id,
-    #             'name': f"{other_participant.first_name or ''} {other_participant.last_name or ''}".strip() or other_participant.phone,
-    #             'phone': other_participant.phone,
-    #         } if other_participant else None,
-    #         'created_at': room.created_at,
-    #         'updated_at': room.updated_at,
-    #     })
-
-    # @action(detail=True, methods=['post'])
-    # def toggle_active(self, request, pk=None):
-    #     """
-    #     Chat roomni aktivlashtirish yoki deaktivlashtirish
-    #
-    #     POST /api/doctor/chat-rooms/{id}/toggle-active/
-    #
-    #     Body (optional):
-    #     {
-    #         "is_active": true  // yoki false
-    #     }
-    #
-    #     Agar body bo'lmasa, avtomatik toggle qiladi
-    #     """
-    #     room = self.get_object()
-    #
-    #     # Request body dan is_active olish
-    #     new_status = request.data.get('is_active')
-    #
-    #     if new_status is not None:
-    #         # Aniq qiymat berilgan
-    #         room.is_active = bool(new_status)
-    #     else:
-    #         # Toggle qilish
-    #         room.is_active = not room.is_active
-    #
-    #     room.save()
-    #
-    #     # Ikkinchi participant
-    #     other_participant = room.participants.exclude(id=request.user.id).first()
-    #
-    #     import logging
-    #     logger = logging.getLogger(__name__)
-    #     logger.info(f"Doctor {request.user.id} {'activated' if room.is_active else 'deactivated'} chat room {room.id}")
-    #
-    #     # Clientga notification yuborish (optional)
-    #     if other_participant:
-    #         try:
-    #             from utils.fcm import send_fcm
-    #
-    #             if room.is_active:
-    #                 send_fcm(
-    #                     user=other_participant,
-    #                     type='chat_activated',
-    #                     title='Chat aktivlashtirildi',
-    #                     body=f'Dr. {request.user.first_name} bilan chat yana ochildi',
-    #                     chat_room_id=room.id,
-    #                 )
-    #             else:
-    #                 send_fcm(
-    #                     user=other_participant,
-    #                     type='chat_deactivated',
-    #                     title='Chat yopildi',
-    #                     body=f'Dr. {request.user.first_name} bilan chat yakunlandi',
-    #                     chat_room_id=room.id,
-    #                 )
-    #         except Exception as e:
-    #             logger.error(f"Failed to send FCM: {e}")
-    #
-    #     return Response({
-    #         'room_id': room.id,
-    #         'is_active': room.is_active,
-    #         'message': f"Chat room {'activated' if room.is_active else 'deactivated'} successfully"
-    #     })
 
     @action(detail=True, methods=['post'])
     def activate(self, request, pk=None):
