@@ -51,22 +51,34 @@ class ConsultationRequestSerializer(serializers.ModelSerializer):
             'completed_at',
         ]
 
-    def get_doctor_name(self, obj):
-        """Doctor nomi"""
-        try:
-            doctor = Doctor.objects.get(user=obj.doctor)
-            return doctor.full_name
-        except:
-            return obj.doctor.first_name or obj.doctor.phone
+    def get_client_name(self, obj):
+        """Client nomi"""
+        first_name = obj.client.first_name or ''
+        last_name = obj.client.last_name or ''
+        full_name = f"{first_name} {last_name}".strip()
 
-    def get_doctor_avatar(self, obj):
-        """Doctor avatar"""
-        try:
-            doctor = Doctor.objects.get(user=obj.doctor)
-            if doctor.avatar:
-                return doctor.avatar.url
-        except:
-            pass
+        # Agar to'liq ism bo'lmasa
+        if not full_name:
+            # Telefon raqam o'rniga "Mijoz" yoki formatted phone
+            phone = obj.client.phone or ''
+            if phone:
+                # +998 XX XXX XX XX formatida
+                if phone.startswith('998') and len(phone) >= 12:
+                    return f"+{phone[:3]} {phone[3:5]} {phone[5:8]} {phone[8:10]} {phone[10:]}"
+                return f"+{phone}"
+            return "Mijoz"  # Default
+
+        return full_name
+
+    def get_client_avatar(self, obj):
+        """Client avatar URL (to'liq URL)"""
+        if hasattr(obj.client, 'avatar') and obj.client.avatar:
+            # Request context orqali to'liq URL yaratish
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.client.avatar.url)
+            # Yoki faqat URL
+            return obj.client.avatar.url
         return None
 
     def get_doctor_type(self, obj):
