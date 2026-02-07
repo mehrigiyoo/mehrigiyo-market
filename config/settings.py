@@ -84,7 +84,8 @@ INSTALLED_APPS = [
     'api',
     'client',
     'support',
-    'partner_auth'
+    'partner_auth',
+    'consultation',
 ]
 
 
@@ -110,6 +111,7 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'partner_auth.middleware.PartnerRateLimitMiddleware',
+    # 'payment.middleware.PaymentSecurityMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -409,39 +411,58 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose' if DEBUG else 'simple',
         },
-        'file': {
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': BASE_DIR / 'logs' / 'django.log',
-            'maxBytes': 1024 * 1024 * 10,  # 10MB
-            'backupCount': 5,
-            'formatter': 'verbose',
-        },
+        # 'file': {
+        #     'class': 'logging.handlers.RotatingFileHandler',
+        #     'filename': BASE_DIR / 'logs' / 'django.log',
+        #     'maxBytes': 1024 * 1024 * 10,  # 10MB
+        #     'backupCount': 5,
+        #     'formatter': 'verbose',
+        # },
     },
-    'root': {
-        'handlers': ['console', 'file'],
-        'level': 'INFO' if not DEBUG else 'DEBUG',
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'call': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'chat': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-    },
+    # 'root': {
+    #     'handlers': ['console', 'file'],
+    #     'level': 'INFO' if not DEBUG else 'DEBUG',
+    # },
+    # 'loggers': {
+    #     'django': {
+    #         'handlers': ['console', 'file'],
+    #         'level': 'INFO',
+    #         'propagate': False,
+    #     },
+    #     'call': {
+    #         'handlers': ['console', 'file'],
+    #         'level': 'INFO',
+    #         'propagate': False,
+    #     },
+    #     'chat': {
+    #         'handlers': ['console', 'file'],
+    #         'level': 'INFO',
+    #         'propagate': False,
+    #     },
+    # },
 }
 
 
 
+# Payme Merchant Configuration
+# PAYME_SETTINGS = {
+#     'MERCHANT_ID': env('PAYME_MERCHANT_ID', default=''),  # From Payme dashboard
+#     'SECRET_KEY': env('PAYME_SECRET_KEY', default=''),    # From Payme dashboard
+#     'ACCOUNTS': {
+#         'KEY': 'order_id',  # Account key for Payme
+#     },
+#     'ENVIRONMENT': env('PAYME_ENV', default='test'),  # 'test' or 'prod'
+#     'ENDPOINT': {
+#         'test': 'https://test.paycom.uz',
+#         'prod': 'https://checkout.paycom.uz',
+#     }
+# }
+#
+# # Callback URL (Payme will call this)
+# PAYME_CALLBACK_URL = env(
+#     'PAYME_CALLBACK_URL',
+#     default='https://imorganic.uz/api/payments/payme/callback/'
+# )
 
 
 

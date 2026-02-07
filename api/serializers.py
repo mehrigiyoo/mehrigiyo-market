@@ -170,23 +170,7 @@ class NewsModelAdminSerializer(serializers.ModelSerializer):
         model = NewsModel
         fields = '__all__'
 
-
-from paymeuz.models import PaymeTransactionModel, Card
-
-
-class PaymeTransactionModelAdminSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PaymeTransactionModel
-        fields = '__all__'
-
-
-class CardAdminSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Card
-        fields = '__all__'
-
-
-from shop.models import PicturesMedicine, TypeMedicine, Medicine, CartModel, DeliveryMan, OrderModel
+from shop.models import PicturesMedicine, TypeMedicine, Medicine, CartModel, DeliveryMan
 
 
 class PicturesMedicineAdminSerializer(serializers.ModelSerializer):
@@ -219,12 +203,12 @@ class DeliveryManAdminSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class OrderModelAdminSerializer(serializers.ModelSerializer):
-    user = UserModelAdminSerializer()
-
-    class Meta:
-        model = OrderModel
-        fields = '__all__'
+# class OrderModelAdminSerializer(serializers.ModelSerializer):
+#     user = UserModelAdminSerializer()
+#
+#     class Meta:
+#         model = OrderModel
+#         fields = '__all__'
 
 
 from specialist.models import TypeDoctor, Doctor, RateDoctor, AdviceTime

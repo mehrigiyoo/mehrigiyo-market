@@ -35,7 +35,7 @@ class MessageAdmin(admin.ModelAdmin):
 # ChatRoom Admin
 class ChatRoomAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
-    list_display = ['id', 'get_participants',  'created_at']
+    list_display = ['id', 'get_participants', 'is_active',  'created_at']
     list_filter = [ParticipantFilter]
     search_fields = ['id']
     filter_horizontal = ['participants']

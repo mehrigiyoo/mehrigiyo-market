@@ -2,7 +2,7 @@ from admin_auto_filters.filters import AutocompleteFilter
 
 from django.contrib import admin
 from modeltranslation.admin import TabbedTranslationAdmin
-from .models import Medicine, TypeMedicine, OrderModel, CartModel, PicturesMedicine, DeliveryMan
+from .models import Medicine, TypeMedicine, CartModel, PicturesMedicine, DeliveryMan
 
 
 class TypeMedicineFilter(AutocompleteFilter):
@@ -75,18 +75,18 @@ class DeliveryManAdmin(admin.ModelAdmin):
 admin.site.register(DeliveryMan, DeliveryManAdmin)
 
 
-class OrderModelAdmin(admin.ModelAdmin):
-    date_hierarchy = 'created_at'
-    list_display = ['id', 'user', 'credit_card', 'price', 'payment_type', 'payment_status',
-                    'delivery_status', 'delivery', 'created_at', ]
-    list_filter = [UserFilter, CreditCardFilter, ShippingAddressFilter, 'payment_type', 'payment_status',
-                   'delivery_status', DeliveryFilter, ]
-    search_fields = ['id', 'price', ]
-    autocomplete_fields = ['user', 'credit_card', 'delivery', ]
-    filter_horizontal = ['cart_products', ]
+# class OrderModelAdmin(admin.ModelAdmin):
+#     date_hierarchy = 'created_at'
+#     list_display = ['id', 'user', 'credit_card', 'price', 'payment_type', 'payment_status',
+#                     'delivery_status', 'delivery', 'created_at', ]
+#     list_filter = [UserFilter, CreditCardFilter, ShippingAddressFilter, 'payment_type', 'payment_status',
+#                    'delivery_status', DeliveryFilter, ]
+#     search_fields = ['id', 'price', ]
+#     # autocomplete_fields = ['user',  'delivery', ]
+#     filter_horizontal = ['cart_products', ]
 
 
 admin.site.register(Medicine, MedicineAdmin)
 admin.site.register(TypeMedicine, TypeMedicineAdmin)
-admin.site.register(OrderModel, OrderModelAdmin)
+# admin.site.register(OrderModel, OrderModelAdmin)
 admin.site.register(CartModel, CartModelAdmin)

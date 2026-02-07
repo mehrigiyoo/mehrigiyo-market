@@ -1,13 +1,9 @@
-import datetime
 from admin_auto_filters.filters import AutocompleteFilter
 
-from django import forms
 from django.contrib import admin
 from modeltranslation.admin import TabbedTranslationAdmin
-
-from news.forms import NotificationAdminForm
 from shop.models import Feedbacks
-from .models import NewsModel, Stories, TagsModel, Advertising, Notification, StoriesImage
+from .models import NewsModel, Stories, TagsModel, Advertising, StoriesImage
 
 
 class HashTagFilter(AutocompleteFilter):

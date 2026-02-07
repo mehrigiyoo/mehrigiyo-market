@@ -1,8 +1,5 @@
-import json
-
-from django.db.models import Avg
 from rest_framework import serializers
-from .models import Feedbacks, PicturesMedicine, TypeMedicine, Medicine, CartModel, OrderModel
+from .models import PicturesMedicine, TypeMedicine, Medicine, CartModel
 
 
 class PicturesMedicineSerializer(serializers.ModelSerializer):
@@ -119,14 +116,14 @@ class OrderPutSerializer(serializers.Serializer):
     credit_card = serializers.IntegerField()
 
 
-class OrderCreateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = OrderModel
-        fields = ('id', 'user', 'credit_card', 'shipping_address', 'cart_products', 'price', 'payment_type',
-                  'payment_status', 'delivery_status', 'created_at')
-        extra_kwargs = {
-            'cart_products': {'required': False}
-        }
+# class OrderCreateSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = OrderModel
+#         fields = ('id', 'user', 'credit_card', 'shipping_address', 'cart_products', 'price', 'payment_type',
+#                   'payment_status', 'delivery_status', 'created_at')
+#         extra_kwargs = {
+#             'cart_products': {'required': False}
+#         }
 
 
 # class OrderShowSerializer(serializers.ModelSerializer):

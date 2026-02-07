@@ -3,9 +3,9 @@ from rest_framework import routers
 from .views import (UserModelAdminViewSet, SmsCodeAdminViewSet, SmsAttemptAdminViewSet, CountyModelAdminViewSet,
                     RegionModelAdminViewSet, MessageAdminViewSet, ChatRoomAdminViewSet,
                     CommentDoctorAdminViewSet, CommentMedicineAdminViewSet, NewsModelAdminViewSet,
-                    PaymeTransactionModelAdminViewSet, CardAdminViewSet, PicturesMedicineAdminViewSet,
+                    PicturesMedicineAdminViewSet,
                     TypeMedicineAdminViewSet, MedicineAdminViewSet, CartModelAdminViewSet, DeliveryManAdminViewSet,
-                    OrderModelAdminViewSet, TypeDoctorAdminViewSet, DoctorAdminViewSet, RateDoctorAdminViewSet,
+                    TypeDoctorAdminViewSet, DoctorAdminViewSet, RateDoctorAdminViewSet,
                     AdviceTimeAdminViewSet, NotificationAdminViewSet)
 router = routers.DefaultRouter()
 

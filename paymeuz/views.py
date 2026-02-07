@@ -1,244 +1,172 @@
-import time
-from collections import defaultdict
-
-from django.db.models import Sum
-from drf_yasg.utils import swagger_auto_schema
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from rest_framework.views import APIView
-
-from account.models import UserModel
-from account.serializers import UserSerializer
-from config.responses import ResponseSuccess, ResponseFail
-from shop.models import OrderModel
-from .keywords import *
-from .methods import (create_cards, cards_get_verify_code, cards_verify, cards_remove, create_transaction,
-                      pay_transaction, send_order)
-from .models import PaymeTransactionModel, Card
-from .serializers import CardSerializer, CardInputSerializer, CardConfirmSerializer, \
-    CardSendConfirmSerializer, ReferralSerializer
-
-
-class CardView(APIView):
-    permission_classes = (IsAuthenticated,)
-
-    @swagger_auto_schema(
-        operation_id='card',
-        operation_description="Card data",
-        # request_body=AdvertisingSerializer(),
-        responses={
-            '200': CardSerializer()
-        },
-    )
-    def get(self, request):
-        card = Card.objects.filter(owner=request.user, is_deleted=False)
-        serializer = CardSerializer(card, many=True)
-        return ResponseSuccess(data=serializer.data, request=request.method)
-
-    @swagger_auto_schema(
-        operation_id='create_card',
-        operation_description="Create card data",
-        request_body=CardInputSerializer(),
-        responses={
-            '200': CardSerializer()
-        },
-    )
-    def post(self, request):
-        serializer = CardInputSerializer(data=request.data)
-        if serializer.is_valid():
-            data = create_cards(request.data['number'], request.data['expire'], save=True)
-            try:
-                data = data['result']['card']
-            except:
-                code = data['error']['code']
-                if code == SMS_NOT_CONNECTED:
-                    return ResponseFail(data=SMS_NOT_CONNECTED_MESSAGE)
-                if code == CARD_NOT_WORKING:
-                    return ResponseFail(data=CARD_NOT_WORKING_MESSAGE)
-                if code == SYSTEM_ERROR:
-                    return ResponseFail(data=SYSTEM_ERROR_MESSAGE)
-                return ResponseFail(data=data)
-            serializer = CardSerializer(data=data, context={'request': request})
-            if serializer.is_valid():
-                serializer.save()
-                data = cards_get_verify_code(token=data['token'])
-                try:
-                    code = data['error']['code']
-                    if code == SYSTEM_ERROR:
-                        SYSTEM_ERROR_MESSAGE['token'] = data['token']
-                        return ResponseFail(data=SYSTEM_ERROR_MESSAGE)
-                except:
-                    return ResponseSuccess(data=serializer.data)
-            else:
-                return ResponseFail(data=serializer.errors)
-
-    @swagger_auto_schema(
-        operation_id='activate_card',
-        operation_description="Activate card data",
-        request_body=CardConfirmSerializer(),
-        responses={
-            '200': CardSerializer()
-        },
-    )
-    def put(self, request):
-        card = Card.objects.get(id=request.data['card_id'])
-        print(card)
-        data = cards_verify(request.data['code'], card.token)
-        try:
-            data = data['result']['card']
-            serializer = CardSerializer(card, data=data, context={'request': request})
-            if serializer.is_valid():
-                serializer.save()
-                # data = cards_check(card.token)
-                return ResponseSuccess(data=serializer.data, request=request.method)
-        except:
-            code = data['error']['code']
-            if code == INVALID_CODE:
-                return ResponseFail(data=INVALID_CODE_MESSAGE)
-            if code == TIME_OUT:
-                return ResponseFail(data=TIME_OUT_MESSAGE)
-            return ResponseFail(data=data)
-
-    @swagger_auto_schema(
-        operation_id='remove_card',
-        operation_description="Activate card data",
-        request_body=CardSendConfirmSerializer(),
-        # responses={
-        #     '200': CardSerializer()
-        # },
-    )
-    def delete(self, request):
-        card = Card.objects.get(id=request.data['card_id'])
-        data = cards_remove(card.token)
-        if data:
-            card.is_deleted = True
-            card.save()
-            return ResponseSuccess(data=data)
-        else:
-            return ResponseFail()
-
-
-class CardGetVerifyCodeView(APIView):
-    permission_classes = (IsAuthenticated,)
-
-    @swagger_auto_schema(
-        operation_id='send_verify_card',
-        operation_description="Send verify card data",
-        request_body=CardSendConfirmSerializer(),
-        # responses={
-        #     '200': CardSerializer()
-        # },
-    )
-    def post(self, request):
-        card = Card.objects.get(id=request.data['card_id'])
-        data = cards_get_verify_code(token=card.token)
-        print(data)
-        try:
-            code = data['error']['code']
-            if code == SYSTEM_ERROR:
-                SYSTEM_ERROR_MESSAGE['token'] = data['token']
-                return ResponseFail(data=SYSTEM_ERROR_MESSAGE)
-        except:
-            return ResponseSuccess(data=data)
-        data = cards_get_verify_code(token=request.data['token'])
-        return ResponseSuccess(data=data)
-
-
-class PayTransactionView(APIView):
-    permission_classes = (IsAuthenticated,)
-
-    @swagger_auto_schema(
-        operation_id='send_verify_card',
-        operation_description="Send verify card data",
-        request_body=CardSendConfirmSerializer(),
-        # responses={
-        #     '200': CardSerializer()
-        # },
-    )
-    def post(self, request):
-        order = None
-        try:
-            order = OrderModel.objects.get(id=request.data['card_id'], payment_status=1)
-        except:
-            return ResponseFail(data='Order not found')
-
-        user_name = order.user.get_full_name()
-        order_name = f"Cart #{order.id}"
-
-        print(f"Username: {user_name}")
-        print(f"Order id: {order_name}")
-
-        data = create_transaction(user_name, order_name, order.id, order.price)
-        if 'error' in data:
-            print('HAVE A ERROR TO CREATE TRANSACTION')
-            order.payment_status = 2
-            order.save()
-            return ResponseFail(data=data)
-        create_time = int(time.time() * 1000)
-
-        model = PaymeTransactionModel()
-        model.request_id = order.id
-        model._id = data['result']['receipt']['_id']
-        model.amount = data['result']['receipt']['amount']
-        model.order_id = order.id
-        model.state = data['result']['receipt']['state']
-        model.create_time = create_time
-        model.save()
-
-        data = pay_transaction(model._id, order.credit_card.token)
-        if 'error' in data:
-            print('HAVE A ERROR TO PAY')
-            order.payment_status = 2
-            order.save()
-            return ResponseFail(data=data)
-
-        model._id = data['result']['receipt']['_id']
-        model.amount = data['result']['receipt']['amount']
-        model.order_id = order.id
-        model.state = data['result']['receipt']['state']
-        model.status = SUCCESS
-        model.create_time = create_time
-        model.save()
-
-        order.payment_status = 3
-        order.save()
-
-        # data = send_transaction(model._id, request.user.username)
-        # if 'error' in data:
-        #     print('HAVE A ERROR TO SEND TRANSACTION')
-        #     return ResponseFail(data=data)
-        send_order(order.id)
-        return ResponseSuccess(data=data)
-
-
-class UserReferralView(APIView):
-    permission_classes = (IsAuthenticated,)
-
-    def get(self, request, *args, **kwargs):
-        grouped_data = PaymeTransactionModel.objects.values('request_id').annotate(
-            total_amount=Sum('amount')
-        )
-
-        order_ids_mapping = defaultdict(list)
-        for transaction in PaymeTransactionModel.objects.values('request_id', 'order_id'):
-            order_ids_mapping[transaction['request_id']].append(transaction['order_id'])
-
-        result = {}
-        if grouped_data:
-            data = grouped_data[0]
-            request_id = data['request_id']
-            order_ids = order_ids_mapping[request_id]
-            referrals = []
-            for referral in order_ids:
-                user_data = UserModel.objects.filter(username=referral).values('first_name', 'username')
-                if user_data:
-                    user_info = user_data[0]
-                    referrals.append(user_info)
-
-            result = {
-                'total_amount': data['total_amount'],
-                'referrals': referrals
-            }
-
-        serializer = ReferralSerializer(result)
-        return ResponseSuccess(data=serializer.data, request=request.method)
+# # ============================================
+# # FILE: payment/views.py - UPDATE
+# # ============================================
+#
+# from rest_framework import viewsets, status
+# from rest_framework.decorators import action
+# from rest_framework.response import Response
+# from rest_framework.permissions import IsAuthenticated
+# from django.contrib.contenttypes.models import ContentType
+#
+# from .models import Payment
+# from .serializers import PaymentSerializer
+# from .payme.service import PaymeService
+#
+#
+# class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
+#     """
+#     Payment management (client view)
+#
+#     Endpoints:
+#     - GET  /api/payments/          - List my payments
+#     - GET  /api/payments/{id}/     - Get payment detail
+#     - POST /api/payments/create/   - Create payment
+#     - GET  /api/payments/{id}/status/ - Check status
+#     """
+#
+#     permission_classes = [IsAuthenticated]
+#     serializer_class = PaymentSerializer
+#
+#     def get_queryset(self):
+#         """Get user's payments"""
+#         return Payment.objects.filter(user=self.request.user)
+#
+#     @action(detail=False, methods=['post'])
+#     def create(self, request):
+#         """
+#         Create payment
+#
+#         POST /api/payments/create/
+#         {
+#             "payment_type": "market",     # or "consultation"
+#             "object_id": 123,             # Order ID or Consultation ID
+#             "payment_method": "payme"
+#         }
+#
+#         Response:
+#         {
+#             "payment_id": "uuid...",
+#             "payment_url": "https://checkout.paycom.uz/...",
+#             "amount": 150000,
+#             "payment_type": "market"
+#         }
+#         """
+#         payment_type = request.data.get('payment_type')
+#         object_id = request.data.get('object_id')
+#         payment_method = request.data.get('payment_method', 'payme')
+#
+#         # Validate payment type
+#         if payment_type not in ['market', 'consultation']:
+#             return Response(
+#                 {'error': 'Invalid payment_type. Must be "market" or "consultation"'},
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+#
+#         # Get model based on type
+#         if payment_type == 'market':
+#             from order.models import Order
+#             model = Order
+#         else:  # consultation
+#             from consultation.models import ConsultationRequest
+#             model = ConsultationRequest
+#
+#         # Get object
+#         try:
+#             obj = model.objects.get(id=object_id, customer=request.user)
+#         except model.DoesNotExist:
+#             return Response(
+#                 {'error': 'Object not found or access denied'},
+#                 status=status.HTTP_404_NOT_FOUND
+#             )
+#
+#         # Check if already paid
+#         existing_payment = Payment.objects.filter(
+#             content_type=ContentType.objects.get_for_model(model),
+#             object_id=object_id,
+#             status='paid'
+#         ).first()
+#
+#         if existing_payment:
+#             return Response(
+#                 {'error': 'Already paid'},
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+#
+#         # Create payment
+#         content_type = ContentType.objects.get_for_model(model)
+#
+#         # Get amount
+#         if payment_type == 'market':
+#             amount = obj.total_amount
+#             description = f"Order #{obj.order_number}"
+#         else:
+#             amount = obj.doctor.consultation_price
+#             description = f"Consultation with Dr. {obj.doctor.first_name}"
+#
+#         payment = Payment.objects.create(
+#             user=request.user,
+#             payment_type=payment_type,
+#             content_type=content_type,
+#             object_id=object_id,
+#             amount=amount,
+#             payment_method=payment_method,
+#             description=description,
+#             ip_address=self.get_client_ip(request),
+#             user_agent=request.META.get('HTTP_USER_AGENT', ''),
+#             metadata={
+#                 'object_type': payment_type,
+#                 'object_id': object_id,
+#             }
+#         )
+#
+#         # Generate payment URL
+#         if payment_method == 'payme':
+#             payment_url = PaymeService.create_checkout_url(payment)
+#         else:
+#             return Response(
+#                 {'error': 'Unsupported payment method'},
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+#
+#         return Response({
+#             'payment_id': str(payment.id),
+#             'payment_url': payment_url,
+#             'amount': float(payment.amount),
+#             'payment_type': payment_type,
+#             'description': description,
+#         }, status=status.HTTP_201_CREATED)
+#
+#     @action(detail=True, methods=['get'])
+#     def status(self, request, pk=None):
+#         """
+#         Check payment status
+#
+#         GET /api/payments/{id}/status/
+#
+#         Response:
+#         {
+#             "payment_id": "uuid...",
+#             "status": "paid",
+#             "amount": 150000,
+#             "paid_at": "2024-10-01T10:00:00Z"
+#         }
+#         """
+#         payment = self.get_object()
+#
+#         return Response({
+#             'payment_id': str(payment.id),
+#             'status': payment.status,
+#             'payment_type': payment.payment_type,
+#             'amount': float(payment.amount),
+#             'created_at': payment.created_at,
+#             'paid_at': payment.paid_at,
+#         })
+#
+#     def get_client_ip(self, request):
+#         """Get client IP address"""
+#         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+#         if x_forwarded_for:
+#             ip = x_forwarded_for.split(',')[0]
+#         else:
+#             ip = request.META.get('REMOTE_ADDR')
+#         return ip

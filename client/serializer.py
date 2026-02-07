@@ -2,7 +2,7 @@
 from rest_framework import serializers
 from account.models import UserModel, Referrals
 from client.models import ClientProfile, ClientAddress
-from paymeuz.models import PaymeTransactionModel
+# from paymeuz.models import PaymeTransactionModel
 
 
 
@@ -67,14 +67,14 @@ class ClientRegisterSerializer(serializers.Serializer):
             inviter = UserModel.objects.filter(phone=invited).first()
             if inviter:
                 Referrals.objects.create(user=inviter, invited_user=user.phone)
-                PaymeTransactionModel.objects.create(
-                    request_id=inviter.phone,
-                    order_id=user.phone,
-                    phone=user.phone,
-                    amount=10000 * 100,
-                    status='processing',
-                    _type='referal'
-                )
+                # PaymeTransactionModel.objects.create(
+                #     request_id=inviter.phone,
+                #     order_id=user.phone,
+                #     phone=user.phone,
+                #     amount=10000 * 100,
+                #     status='processing',
+                #     _type='referal'
+                # )
 
         return user
 

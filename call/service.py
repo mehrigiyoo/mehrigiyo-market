@@ -1,4 +1,4 @@
-# call/services.py - SIMPLIFIED VERSION (Token only)
+# call/service.py - SIMPLIFIED VERSION (Token only)
 
 from livekit import api
 from django.conf import settings

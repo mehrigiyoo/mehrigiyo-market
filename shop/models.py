@@ -143,20 +143,19 @@ class DeliveryMan(models.Model):
         return f"{self.full_name} ({self.phone})"
 
 
-class OrderModel(models.Model):
-    user = models.ForeignKey('account.UserModel', on_delete=models.RESTRICT, null=True)
-    credit_card = models.ForeignKey('paymeuz.Card', on_delete=models.RESTRICT, null=True)
-    # shipping_address = models.ForeignKey('account.DeliveryAddress', on_delete=models.RESTRICT, null=True, blank=True)
-    cart_products = models.ManyToManyField(CartModel)
-    price = models.IntegerField(null=True)
-    payment_type = models.PositiveSmallIntegerField(choices=PAYMENT_TYPES, default=2)
-    payment_status = models.PositiveSmallIntegerField(choices=PAYMENT_STATUS, default=1)
-    delivery_status = models.PositiveSmallIntegerField(choices=DELIVERY_STATUS, default=1)
-    delivery = models.ForeignKey(DeliveryMan, on_delete=models.RESTRICT, null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def get_payme_amount(self):
-        return self.price * 100
+# class OrderModel(models.Model):
+#     user = models.ForeignKey('account.UserModel', on_delete=models.RESTRICT, null=True)
+#     # shipping_address = models.ForeignKey('account.DeliveryAddress', on_delete=models.RESTRICT, null=True, blank=True)
+#     cart_products = models.ManyToManyField(CartModel)
+#     price = models.IntegerField(null=True)
+#     payment_type = models.PositiveSmallIntegerField(choices=PAYMENT_TYPES, default=2)
+#     payment_status = models.PositiveSmallIntegerField(choices=PAYMENT_STATUS, default=1)
+#     delivery_status = models.PositiveSmallIntegerField(choices=DELIVERY_STATUS, default=1)
+#     delivery = models.ForeignKey(DeliveryMan, on_delete=models.RESTRICT, null=True, blank=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
+#
+#     def get_payme_amount(self):
+#         return self.price * 100
 
     def __str__(self):
         return self.user.get_full_name()

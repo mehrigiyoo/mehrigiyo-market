@@ -211,3 +211,197 @@ class MessageViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(message)
         return Response(serializer.data)
+
+
+
+
+
+
+# Doctor eski chatlarni is_active True/False update
+
+
+class DoctorChatRoomViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Doctor's chat room management
+
+    Endpoints:
+    - GET /api/doctor/chat-rooms/                        - List my chat rooms
+    - GET /api/doctor/chat-rooms/{id}/                   - Chat room detail
+    - POST /api/doctor/chat-rooms/{id}/toggle-active/   - Activate/Deactivate
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Get chat rooms for current doctor"""
+        user = self.request.user
+
+        # Faqat doctorlar kirishi mumkin
+        if user.role != 'doctor':
+            return ChatRoom.objects.none()
+
+        # Doctor ishtirok etgan barcha chat roomlar
+        return ChatRoom.objects.filter(
+            room_type='1:1',
+            participants=user
+        ).prefetch_related('participants').order_by('-updated_at')
+
+    def list(self, request):
+        """
+        Doctor's chat roomlar ro'yxati
+
+        GET /api/doctor/chat-rooms/
+        """
+        queryset = self.get_queryset()
+
+        rooms_data = []
+        for room in queryset:
+            # Ikkinchi participant (client)
+            other_participant = room.participants.exclude(id=request.user.id).first()
+
+            if other_participant:
+                rooms_data.append({
+                    'id': room.id,
+                    'is_active': room.is_active,
+                    'client': {
+                        'id': other_participant.id,
+                        'name': f"{other_participant.first_name or ''} {other_participant.last_name or ''}".strip() or other_participant.phone,
+                        'phone': other_participant.phone,
+                    },
+                    'last_message': room.last_message_text,
+                    'last_message_time': room.last_message_time,
+                    'created_at': room.created_at,
+                    'updated_at': room.updated_at,
+                })
+
+        return Response({
+            'count': len(rooms_data),
+            'results': rooms_data
+        })
+
+    def retrieve(self, request, pk=None):
+        """
+        Chat room detail
+
+        GET /api/doctor/chat-rooms/{id}/
+        """
+        room = self.get_object()
+
+        # Ikkinchi participant
+        other_participant = room.participants.exclude(id=request.user.id).first()
+
+        return Response({
+            'id': room.id,
+            'is_active': room.is_active,
+            'room_type': room.room_type,
+            'client': {
+                'id': other_participant.id,
+                'name': f"{other_participant.first_name or ''} {other_participant.last_name or ''}".strip() or other_participant.phone,
+                'phone': other_participant.phone,
+            } if other_participant else None,
+            'created_at': room.created_at,
+            'updated_at': room.updated_at,
+        })
+
+    @action(detail=True, methods=['post'])
+    def toggle_active(self, request, pk=None):
+        """
+        Chat roomni aktivlashtirish yoki deaktivlashtirish
+
+        POST /api/doctor/chat-rooms/{id}/toggle-active/
+
+        Body (optional):
+        {
+            "is_active": true  // yoki false
+        }
+
+        Agar body bo'lmasa, avtomatik toggle qiladi
+        """
+        room = self.get_object()
+
+        # Request body dan is_active olish
+        new_status = request.data.get('is_active')
+
+        if new_status is not None:
+            # Aniq qiymat berilgan
+            room.is_active = bool(new_status)
+        else:
+            # Toggle qilish
+            room.is_active = not room.is_active
+
+        room.save()
+
+        # Ikkinchi participant
+        other_participant = room.participants.exclude(id=request.user.id).first()
+
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Doctor {request.user.id} {'activated' if room.is_active else 'deactivated'} chat room {room.id}")
+
+        # Clientga notification yuborish (optional)
+        if other_participant:
+            try:
+                from utils.fcm import send_fcm
+
+                if room.is_active:
+                    send_fcm(
+                        user=other_participant,
+                        type='chat_activated',
+                        title='Chat aktivlashtirildi',
+                        body=f'Dr. {request.user.first_name} bilan chat yana ochildi',
+                        chat_room_id=room.id,
+                    )
+                else:
+                    send_fcm(
+                        user=other_participant,
+                        type='chat_deactivated',
+                        title='Chat yopildi',
+                        body=f'Dr. {request.user.first_name} bilan chat yakunlandi',
+                        chat_room_id=room.id,
+                    )
+            except Exception as e:
+                logger.error(f"Failed to send FCM: {e}")
+
+        return Response({
+            'room_id': room.id,
+            'is_active': room.is_active,
+            'message': f"Chat room {'activated' if room.is_active else 'deactivated'} successfully"
+        })
+
+    @action(detail=True, methods=['post'])
+    def activate(self, request, pk=None):
+        """
+        Chat roomni aktivlashtirish
+
+        POST /api/doctor/chat-rooms/{id}/activate/
+        """
+        room = self.get_object()
+        room.is_active = True
+        room.save()
+
+        return Response({
+            'room_id': room.id,
+            'is_active': room.is_active,
+            'message': 'Chat room activated'
+        })
+
+    @action(detail=True, methods=['post'])
+    def deactivate(self, request, pk=None):
+        """
+        Chat roomni deaktivlashtirish
+
+        POST /api/doctor/chat-rooms/{id}/deactivate/
+        """
+        room = self.get_object()
+        room.is_active = False
+        room.save()
+
+        return Response({
+            'room_id': room.id,
+            'is_active': room.is_active,
+            'message': 'Chat room deactivated'
+        })
+
+
+
+

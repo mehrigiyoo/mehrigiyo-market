@@ -1,13 +1,17 @@
-from django.urls import path
-from .merchant_views import PaymeCallbackView
-from .views import CardView, PayTransactionView, CardGetVerifyCodeView, UserReferralView
-
+# from django.urls import path, include
+# from rest_framework.routers import DefaultRouter
+#
+# from .views import PaymentViewSet
+# from .payme.views import PaymeCallbackView
+#
+# # Router for REST API
+# router = DefaultRouter()
+# router.register(r'payments', PaymentViewSet, basename='payment')
+#
 urlpatterns = [
-    # path('click/transaction/', ClickCallbackView.as_view()),
-    # path('payme/transaction/', PaymeCallbackView.as_view()),
-    path('card/', CardView.as_view()),
-    path('card/verify/', CardGetVerifyCodeView.as_view()),
-    # path('card/remove/<int:pk>/', CardRemoveView.as_view()),
-    path('pay/', PayTransactionView.as_view()),
-    path('user-referral/', UserReferralView.as_view(), name='user-referral'),
+#     # REST API
+#     path('', include(router.urls)),
+#
+#     # Payme callback (Merchant API)
+#     path('payments/payme/callback/', PaymeCallbackView.as_view(), name='payme-callback'),
 ]

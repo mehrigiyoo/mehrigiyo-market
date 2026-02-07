@@ -14,6 +14,8 @@ class ChatRoom(models.Model):
                                    related_name='created_rooms')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+
 
     # Last message cache (tezlik uchun)
     last_message_text = models.TextField(blank=True, null=True)

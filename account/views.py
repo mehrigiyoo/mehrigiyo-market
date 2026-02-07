@@ -13,11 +13,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from config.helpers import send_sms_code
 from config.responses import ResponseFail, ResponseSuccess
 from config.validators import normalize_phone
-from shop.models import Medicine
-from shop.serializers import MedicineSerializer
 from .models import UserModel, CountyModel, RegionModel, SmsCode, UserDevice
 from .serializers import (SmsSerializer, ConfirmSmsSerializer,
-                          RegionSerializer, CountrySerializer, UserSerializer, PkSerializer,
+                          RegionSerializer, CountrySerializer, UserSerializer,
                           OfferSerializer, ChangePasswordSerializer, ReferalUserSerializer, UserAvatarSerializer,
                           PhoneCheckSerializer, ResetPasswordSerializer, LogoutSerializer, DeleteAccountSerializer,
                           UserDeviceSerializer,

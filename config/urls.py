@@ -66,6 +66,7 @@ urlpatterns = [
         path('client/', include('client.urls')),
         path('support/', include('support.urls')),
         path('partner/', include('partner_auth.urls')),
+        path('consultation/', include('consultation.urls')),
         path('admin/', include('api.urls')),
 
         # path('config/', include([

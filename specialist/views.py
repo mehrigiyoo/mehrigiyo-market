@@ -5,6 +5,7 @@ from django.db.utils import IntegrityError
 from django.db.models import Count, Avg
 from django.utils import timezone
 from rest_framework import viewsets, status
+from rest_framework.decorators import action
 from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
@@ -13,11 +14,13 @@ from rest_framework.views import APIView
 from rest_framework import generics
 
 from account.models import SmsCode
+from consultation.models import ConsultationRequest
 from .permissions import IsDoctor
 from .serializers import TypeDoctorSerializer, AdvertisingSerializer, \
     GenderStatisticsSerializer, AdviceTimeSerializer, AvailableSlotSerializer, \
     DoctorUnavailableSerializer, WorkScheduleSerializer, DoctorProfileSerializer, \
-    DoctorRegisterSerializer, DoctorListSerializer, DoctorDetailSerializer, DoctorRatingSerializer
+    DoctorRegisterSerializer, DoctorListSerializer, DoctorDetailSerializer, DoctorRatingSerializer, \
+    ConsultationDetailSerializer
 from .models import Doctor, TypeDoctor, Advertising, AdviceTime, DoctorUnavailable, WorkSchedule, DoctorView, RateDoctor
 from .services import create_advice_service
 from django.contrib.auth import get_user_model
@@ -294,4 +297,377 @@ class GenderStatisticsView(APIView):
 
         serializer = GenderStatisticsSerializer(data)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Doctor Consultation VIEWS
+
+
+class DoctorConsultationViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Doctor's consultation management
+
+    Endpoints:
+    - GET /api/doctor/consultations/             - List all consultations
+    - GET /api/doctor/consultations/new/         - New consultations (paid, not accepted)
+    - GET /api/doctor/consultations/active/      - Active (accepted, in_progress)
+    - GET /api/doctor/consultations/completed/   - Completed consultations
+    - GET /api/doctor/consultations/{id}/        - Consultation detail
+    - POST /api/doctor/consultations/{id}/accept/ - Accept and create chat room
+    - POST /api/doctor/consultations/{id}/complete/ - Mark as completed
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = ConsultationDetailSerializer
+
+    def get_queryset(self):
+        """Get consultations for current doctor"""
+        user = self.request.user
+
+        # Faqat doctorlar kirishi mumkin
+        if user.role != 'doctor':
+            return ConsultationRequest.objects.none()
+
+        return ConsultationRequest.objects.filter(
+            doctor=user
+        ).select_related(
+            'client',
+            'doctor',
+            'availability_slot',
+            'chat_room'
+        ).order_by('-created_at')
+
+    @action(detail=False, methods=['get'])
+    def new(self, request):
+        """
+        Yangi konsultatsiyalar (to'langan, hali qabul qilinmagan)
+
+        GET /api/doctor/consultations/new/
+        """
+        consultations = self.get_queryset().filter(
+            status='paid'
+        )
+
+        serializer = self.get_serializer(consultations, many=True)
+        return Response({
+            'count': consultations.count(),
+            'results': serializer.data
+        })
+
+    @action(detail=False, methods=['get'])
+    def active(self, request):
+        """
+        Active konsultatsiyalar (accepted, in_progress)
+
+        GET /api/doctor/consultations/active/
+        """
+        consultations = self.get_queryset().filter(
+            status__in=['accepted', 'in_progress']
+        )
+
+        serializer = self.get_serializer(consultations, many=True)
+        return Response({
+            'count': consultations.count(),
+            'results': serializer.data
+        })
+
+    @action(detail=False, methods=['get'])
+    def completed(self, request):
+        """
+        Tugatilgan konsultatsiyalar
+
+        GET /api/doctor/consultations/completed/
+        """
+        consultations = self.get_queryset().filter(
+            status='completed'
+        )
+
+        serializer = self.get_serializer(consultations, many=True)
+        return Response({
+            'count': consultations.count(),
+            'results': serializer.data
+        })
+
+    # Accept metodini yangilang:
+    @action(detail=True, methods=['post'])
+    def accept(self, request, pk=None):
+        """
+        Konsultatsiyani qabul qilish va chat room yaratish
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        consultation = self.get_object()
+
+        if consultation.doctor != request.user:
+            return Response(
+                {'error': 'This is not your consultation'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if consultation.status != 'paid':
+            return Response(
+                {'error': f'Cannot accept consultation with status {consultation.status}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Accept qilish
+        try:
+            consultation.accept()
+            logger.info(f"✅ Consultation {consultation.id} accepted by doctor {request.user.id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to accept consultation {consultation.id}: {e}")
+            return Response(
+                {'error': f'Failed to accept consultation: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        # Notifications
+        try:
+            self._notify_client_acceptance(consultation)
+            logger.info(f"✅ Client notification sent for consultation {consultation.id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to send client notification: {e}")
+
+        try:
+            self._notify_telegram_acceptance(consultation)
+            logger.info(f"✅ Telegram notification sent for consultation {consultation.id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to send Telegram notification: {e}")
+
+        return Response({
+            'consultation_id': consultation.id,
+            'status': consultation.status,
+            'chat_room': {
+                'id': consultation.chat_room.id,
+            } if consultation.chat_room else None,
+            'message': 'Consultation accepted and chat room created'
+        })
+
+    # Complete metodini yangilang:
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """
+        Konsultatsiyani tugatish
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        consultation = self.get_object()
+
+        if consultation.doctor != request.user:
+            return Response(
+                {'error': 'This is not your consultation'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if consultation.status not in ['accepted', 'in_progress']:
+            return Response(
+                {'error': f'Cannot complete consultation with status {consultation.status}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Tugatish
+        try:
+            consultation.complete()
+            logger.info(f"✅ Consultation {consultation.id} completed by doctor {request.user.id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to complete consultation {consultation.id}: {e}")
+            return Response(
+                {'error': f'Failed to complete consultation: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        # Chat roomni deactivate
+        if consultation.chat_room:
+            try:
+                consultation.chat_room.is_active = False
+                consultation.chat_room.save()
+                logger.info(f"✅ Chat room {consultation.chat_room.id} deactivated")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not deactivate chat room: {e}")
+
+        # Notifications
+        try:
+            self._notify_client_completion(consultation)
+            logger.info(f"✅ Client completion notification sent for consultation {consultation.id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to send client completion notification: {e}")
+
+        try:
+            self._notify_telegram_completion(consultation)
+            logger.info(f"✅ Telegram completion notification sent for consultation {consultation.id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to send Telegram completion notification: {e}")
+
+        return Response({
+            'consultation_id': consultation.id,
+            'status': consultation.status,
+            'completed_at': consultation.completed_at,
+            'message': 'Consultation completed successfully'
+        })
+
+    def _notify_client_acceptance(self, consultation):
+        """
+        Clientga konsultatsiya qabul qilingani haqida xabar yuborish
+        """
+        from utils.fcm import send_fcm
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"📤 Sending acceptance FCM to client {consultation.client.id}")
+
+        try:
+            send_fcm(
+                user=consultation.client,
+                type='consultation_accepted',
+                title='Konsultatsiya qabul qilindi',
+                body=f'Dr. {consultation.doctor.first_name or "Doctor"} sizning konsultatsiyangizni qabul qildi',
+                consultation_id=consultation.id,
+                doctor_id=consultation.doctor.id,
+                doctor_name=consultation.doctor.first_name or 'Doctor',
+                chat_room_id=consultation.chat_room.id if consultation.chat_room else None,
+            )
+            logger.info(f"✅ Acceptance FCM sent successfully to client {consultation.client.id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to send acceptance FCM to client {consultation.client.id}: {e}")
+            raise
+
+    def _notify_client_completion(self, consultation):
+        """
+        Clientga konsultatsiya tugatilgani haqida xabar yuborish
+        """
+        from utils.fcm import send_fcm
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"📤 Sending completion FCM to client {consultation.client.id}")
+
+        try:
+            send_fcm(
+                user=consultation.client,
+                type='consultation_completed',
+                title='Konsultatsiya tugatildi',
+                body=f'Dr. {consultation.doctor.first_name or "Doctor"} bilan konsultatsiyangiz yakunlandi',
+                consultation_id=consultation.id,
+                doctor_id=consultation.doctor.id,
+                doctor_name=consultation.doctor.first_name or 'Doctor',
+            )
+            logger.info(f"✅ Completion FCM sent successfully to client {consultation.client.id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to send completion FCM to client {consultation.client.id}: {e}")
+            raise
+
+    def _notify_telegram_acceptance(self, consultation):
+        """
+        Telegram botga doctor qabul qilgani haqida xabar
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            doctor = Doctor.objects.get(user=consultation.doctor)
+            doctor_name = doctor.full_name
+        except:
+            doctor_name = consultation.doctor.first_name or "Unknown"
+
+        message = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━
+✅ KONSULTATSIYA QABUL QILINDI #{consultation.id}
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏥 Doctor: {doctor_name}
+🆔 Doctor User ID: {consultation.doctor.id}
+
+👤 Client: {consultation.client.first_name or 'Ism yoq'} {consultation.client.last_name or ''}
+📞 Telefon: {consultation.client.phone}
+🆔 Client User ID: {consultation.client.id}
+
+📅 Sana: {consultation.requested_date.strftime('%d.%m.%Y')}
+🕐 Vaqt: {consultation.requested_time.strftime('%H:%M')}
+
+💬 Chat Room ID: {consultation.chat_room.id if consultation.chat_room else 'N/A'}
+✅ Status: ACCEPTED
+━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+
+        logger.info(f"📤 Telegram ACCEPTANCE notification:\n{message}")
+
+        # TODO: Telegram botga yuborish
+        from utils.telegram import send_to_bot
+        send_to_bot(message)
+
+    def _notify_telegram_completion(self, consultation):
+        """
+        Telegram botga konsultatsiya tugatilgani haqida xabar
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            doctor = Doctor.objects.get(user=consultation.doctor)
+            doctor_name = doctor.full_name
+        except:
+            doctor_name = consultation.doctor.first_name or "Unknown"
+
+        # Davomiylikni hisoblash
+        duration = "N/A"
+        if consultation.accepted_at and consultation.completed_at:
+            delta = consultation.completed_at - consultation.accepted_at
+            minutes = int(delta.total_seconds() / 60)
+            duration = f"{minutes} minut"
+
+        message = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━
+✅ KONSULTATSIYA TUGATILDI #{consultation.id}
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏥 Doctor: {doctor_name}
+🆔 Doctor User ID: {consultation.doctor.id}
+
+👤 Client: {consultation.client.first_name or 'Ism yoq'} {consultation.client.last_name or ''}
+📞 Telefon: {consultation.client.phone}
+🆔 Client User ID: {consultation.client.id}
+
+📅 Sana: {consultation.requested_date.strftime('%d.%m.%Y')}
+🕐 Vaqt: {consultation.requested_time.strftime('%H:%M')}
+
+⏱️ Davomiyligi: {duration}
+✅ Status: COMPLETED
+━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+
+        logger.info(f"📤 Telegram COMPLETION notification:\n{message}")
+
+        # TODO: Telegram botga yuborish
+        from utils.telegram import send_to_bot
+        send_to_bot(message)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

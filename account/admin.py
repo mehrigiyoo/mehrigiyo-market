@@ -27,7 +27,7 @@ class UserFilter(AutocompleteFilter):
 @admin.register(UserModel)
 class CustomUserAdmin(BaseUserAdmin):
     model = UserModel
-    list_display = ('phone','role','language','theme_mode','is_staff','is_active')
+    list_display = ('id', 'phone','role','language','theme_mode','is_staff','is_active')
     list_filter = ('role','language','theme_mode','is_staff','is_active')
     search_fields = ('phone','email','id')
     ordering = ('phone',)

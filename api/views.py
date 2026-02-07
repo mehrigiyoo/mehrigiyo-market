@@ -1,6 +1,3 @@
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated
 
 from news.send_notification import sendPush
 from .serializers import *
@@ -73,18 +70,6 @@ class NewsModelAdminViewSet(viewsets.ModelViewSet):
     # permission_classes = [IsAuthenticated, ]
 
 
-class PaymeTransactionModelAdminViewSet(viewsets.ModelViewSet):
-    queryset = PaymeTransactionModel.objects.all()
-    serializer_class = PaymeTransactionModelAdminSerializer
-    permission_classes = [IsAuthenticated, ]
-
-
-class CardAdminViewSet(viewsets.ModelViewSet):
-    queryset = Card.objects.all()
-    serializer_class = CardAdminSerializer
-    permission_classes = [IsAuthenticated, ]
-
-
 class PicturesMedicineAdminViewSet(viewsets.ModelViewSet):
     queryset = PicturesMedicine.objects.all()
     serializer_class = PicturesMedicineAdminSerializer
@@ -115,10 +100,10 @@ class DeliveryManAdminViewSet(viewsets.ModelViewSet):
     # permission_classes = [IsAuthenticated, ]
 
 
-class OrderModelAdminViewSet(viewsets.ModelViewSet):
-    queryset = OrderModel.objects.all()
-    serializer_class = OrderModelAdminSerializer
-    permission_classes = [IsAuthenticated, ]
+# class OrderModelAdminViewSet(viewsets.ModelViewSet):
+#     queryset = OrderModel.objects.all()
+#     serializer_class = OrderModelAdminSerializer
+#     permission_classes = [IsAuthenticated, ]
 
 
 class TypeDoctorAdminViewSet(viewsets.ModelViewSet):
@@ -131,7 +116,6 @@ class DoctorAdminViewSet(viewsets.ModelViewSet):
     queryset = Doctor.objects.all()
     serializer_class = DoctorAdminSerializer
     # permission_classes = [IsAuthenticated, ]
-    filter_backends = [DjangoFilterBackend, ]
 
     filterset_fields = ['type_doctor']
 

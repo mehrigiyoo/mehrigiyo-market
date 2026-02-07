@@ -1,7 +1,7 @@
 from django.urls import path, include, re_path
 from rest_framework import routers
 from .views import (MedicinesView, TypeMedicineView, MedicineRetrieveView, CartView,
-                    OrderStatusAPIView, MedicineByTypeView, MedicineSearchAPIView, TypeMedicineSearchAPIView)
+                MedicineByTypeView, MedicineSearchAPIView, TypeMedicineSearchAPIView)
 
 router = routers.DefaultRouter()
 router.register(r'types', TypeMedicineView)

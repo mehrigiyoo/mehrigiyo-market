@@ -33,6 +33,13 @@ class Doctor(models.Model):
         choices=(('male', 'Male'), ('female', 'Female'))
     )
 
+    consultation_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=50000,
+        help_text="Consultation price in UZS (Set by admin)"
+    )
+
     average_rating = models.FloatField(default=0)      # 4.6
     rating_count = models.PositiveIntegerField(default=0)  # 128 ta baho
     view_count = models.PositiveIntegerField(default=0)

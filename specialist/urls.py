@@ -20,7 +20,7 @@ urlpatterns = [
 
     path('types/', TypeDoctorListAPI.as_view(), name='type-doctor-list'),
     path('doctors/', DoctorListAPI.as_view(), name='doctor-list'),
-    path('doctors/<int:id>/', DoctorDetailAPI.as_view(), name='doctor-detail'),
+    path('doctor/<int:id>/', DoctorDetailAPI.as_view(), name='doctor-detail'),
     path('doctor/rate/', DoctorRatingCreateAPI.as_view(), name='doctor-rate'),
     path('advertising/', AdvertisingView.as_view()),
     # path('advice/', AdviceView.as_view()),

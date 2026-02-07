@@ -12,7 +12,7 @@ from config.responses import ResponseSuccess
 from .serializers import (TypeMedicineSerializer, MedicineSerializer, CartSerializer,
                           OrderStatusSerializer,
                           MedicineTypeSerializer, CartCreateUpdateSerializer, MedicineDetailSerializer)
-from .models import TypeMedicine, Medicine, CartModel, OrderModel
+from .models import TypeMedicine, Medicine, CartModel
 from rest_framework import viewsets, generics, filters
 from drf_yasg.utils import swagger_auto_schema
 from specialist.models import Doctor, AdviceTime
@@ -263,46 +263,46 @@ class TypeMedicineSearchAPIView(generics.ListAPIView):
 
 
 # Order statictic
-class OrderStatusAPIView(APIView):
-    permission_classes = (IsAuthenticated,)
-    def get(self, request, *args, **kwargs):
-        client_count = AdviceTime.objects.values('client').distinct().count()
-        total_orders = OrderModel.objects.count()
-        doctor_count=Doctor.objects.count()
-        product_total=Medicine.objects.count()
-        delivered_count_all = OrderModel.objects.filter(delivery_status=3).count()
-
-
-        statuses = OrderModel.objects.aggregate(
-            delivered_count=Count('id', filter=Q(delivery_status=3)),
-            in_progress_count=Count('id', filter=Q(delivery_status=2)),
-            canceled_count=Count('id', filter=Q(delivery_status=4))
-        )
-
-        delivered_count = statuses['delivered_count']
-        in_progress_count = statuses['in_progress_count']
-        canceled_count = statuses['canceled_count']
-
-        delivered_percentage = (delivered_count / total_orders) * 100 if total_orders > 0 else 0
-        in_progress_percentage = (in_progress_count / total_orders) * 100 if total_orders > 0 else 0
-        canceled_percentage = (canceled_count / total_orders) * 100 if total_orders > 0 else 0
-
-        response_data = {
-            'delivered_count': delivered_count,
-            'delivered_percentage': delivered_percentage,
-            'in_progress_count': in_progress_count,
-            'in_progress_percentage': in_progress_percentage,
-            'canceled_count': canceled_count,
-            'canceled_percentage': canceled_percentage,
-            'total_orders': total_orders,
-            'doctor_count':doctor_count,
-            'product_total':product_total,
-            'client_count':client_count,
-            'delivered_count_all':delivered_count_all,
-        }
-
-        serializer = OrderStatusSerializer(response_data)
-        return Response(serializer.data)
+# class OrderStatusAPIView(APIView):
+#     permission_classes = (IsAuthenticated,)
+#     def get(self, request, *args, **kwargs):
+#         client_count = AdviceTime.objects.values('client').distinct().count()
+#         total_orders = OrderModel.objects.count()
+#         doctor_count=Doctor.objects.count()
+#         product_total=Medicine.objects.count()
+#         delivered_count_all = OrderModel.objects.filter(delivery_status=3).count()
+#
+#
+#         statuses = OrderModel.objects.aggregate(
+#             delivered_count=Count('id', filter=Q(delivery_status=3)),
+#             in_progress_count=Count('id', filter=Q(delivery_status=2)),
+#             canceled_count=Count('id', filter=Q(delivery_status=4))
+#         )
+#
+#         delivered_count = statuses['delivered_count']
+#         in_progress_count = statuses['in_progress_count']
+#         canceled_count = statuses['canceled_count']
+#
+#         delivered_percentage = (delivered_count / total_orders) * 100 if total_orders > 0 else 0
+#         in_progress_percentage = (in_progress_count / total_orders) * 100 if total_orders > 0 else 0
+#         canceled_percentage = (canceled_count / total_orders) * 100 if total_orders > 0 else 0
+#
+#         response_data = {
+#             'delivered_count': delivered_count,
+#             'delivered_percentage': delivered_percentage,
+#             'in_progress_count': in_progress_count,
+#             'in_progress_percentage': in_progress_percentage,
+#             'canceled_count': canceled_count,
+#             'canceled_percentage': canceled_percentage,
+#             'total_orders': total_orders,
+#             'doctor_count':doctor_count,
+#             'product_total':product_total,
+#             'client_count':client_count,
+#             'delivered_count_all':delivered_count_all,
+#         }
+#
+#         serializer = OrderStatusSerializer(response_data)
+#         return Response(serializer.data)
 
 
 

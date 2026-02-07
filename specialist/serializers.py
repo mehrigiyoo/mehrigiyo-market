@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from account.models import UserModel
 from config.validators import normalize_phone
+from consultation.models import ConsultationRequest
 from .models import Doctor, TypeDoctor, RateDoctor, Advertising, AdviceTime, WorkSchedule, DoctorUnavailable, \
     DoctorVerification, DoctorRating
 
@@ -69,7 +70,7 @@ class DoctorDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Doctor
         fields = (
-            'id', 'full_name', 'image', 'experience', 'description',
+            'id', 'full_name', 'image', 'experience', 'consultation_price', 'description',
             'type_doctor', 'average_rating', 'rating_count',
             'view_count', 'top', 'birthday', 'gender', 'stars'
         )
@@ -245,3 +246,157 @@ class GenderStatisticsSerializer(serializers.Serializer):
     female_percentage = serializers.FloatField()
     male_count = serializers.IntegerField()
     female_count = serializers.IntegerField()
+
+
+
+
+
+
+
+
+
+
+# Doctor Consultation SERIALIZERS
+
+
+class ConsultationDetailSerializer(serializers.ModelSerializer):
+    """
+    Doctor uchun batafsil konsultatsiya ma'lumoti
+    """
+
+    # Client ma'lumotlari
+    client_id = serializers.IntegerField(source='client.id', read_only=True)
+    client_name = serializers.SerializerMethodField()
+    client_phone = serializers.CharField(source='client.phone', read_only=True)
+    client_avatar = serializers.SerializerMethodField()
+
+    # Vaqt ma'lumotlari
+    date = serializers.SerializerMethodField()
+    time = serializers.SerializerMethodField()
+
+    # Chat room
+    chat_room_id = serializers.IntegerField(source='chat_room.id', read_only=True, allow_null=True)
+    chat_room_name = serializers.CharField(source='chat_room.name', read_only=True, allow_null=True)
+
+    # Status
+    is_paid = serializers.SerializerMethodField()
+    can_accept = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ConsultationRequest
+        fields = [
+            'id',
+            'client_id',
+            'client_name',
+            'client_phone',
+            'client_avatar',
+            'date',
+            'time',
+            'reason',
+            'notes',
+            'status',
+            'is_paid',
+            'can_accept',
+            'chat_room_id',
+            'chat_room_name',
+            'created_at',
+            'paid_at',
+            'accepted_at',
+            'started_at',
+            'completed_at',
+        ]
+
+    def get_is_paid(self, obj):
+        """To'langanmi?"""
+        return obj.status in ['paid', 'accepted', 'in_progress', 'completed']
+
+    def get_client_name(self, obj):
+        """Client nomi"""
+        first_name = obj.client.first_name or ''
+        last_name = obj.client.last_name or ''
+        full_name = f"{first_name} {last_name}".strip()
+
+        if not full_name:
+            return obj.client.phone
+
+        return full_name
+
+    def get_client_avatar(self, obj):
+        """Client avatar URL"""
+        if hasattr(obj.client, 'avatar') and obj.client.avatar:
+            return obj.client.avatar.url
+        return None
+
+    def get_date(self, obj):
+        """Konsultatsiya sanasi"""
+        if obj.availability_slot:
+            return obj.availability_slot.date.strftime('%Y-%m-%d')
+        return obj.requested_date.strftime('%Y-%m-%d')
+
+    def get_time(self, obj):
+        """Konsultatsiya vaqti (formatted)"""
+        if obj.availability_slot:
+            start = obj.availability_slot.start_time.strftime('%H:%M')
+            end = obj.availability_slot.end_time.strftime('%H:%M')
+            return f"{start} - {end}"
+        return obj.requested_time.strftime('%H:%M')
+
+    def get_can_accept(self, obj):
+        """Doctor qabul qila oladimi?"""
+        return obj.status == 'paid'
+
+
+class ConsultationListSerializer(serializers.ModelSerializer):
+    """
+    Qisqa ma'lumot (list uchun)
+    """
+
+    client_name = serializers.SerializerMethodField()
+    client_phone = serializers.CharField(source='client.phone', read_only=True)
+    date = serializers.SerializerMethodField()
+    time = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ConsultationRequest
+        fields = [
+            'id',
+            'client_name',
+            'client_phone',
+            'date',
+            'time',
+            'status',
+            'reason',
+            'created_at',
+        ]
+
+    def get_client_name(self, obj):
+        first_name = obj.client.first_name or ''
+        last_name = obj.client.last_name or ''
+        full_name = f"{first_name} {last_name}".strip()
+        return full_name or obj.client.phone
+
+    def get_date(self, obj):
+        if obj.availability_slot:
+            return obj.availability_slot.date.strftime('%Y-%m-%d')
+        return obj.requested_date.strftime('%Y-%m-%d')
+
+    def get_time(self, obj):
+        if obj.availability_slot:
+            start = obj.availability_slot.start_time.strftime('%H:%M')
+            end = obj.availability_slot.end_time.strftime('%H:%M')
+            return f"{start} - {end}"
+        return obj.requested_time.strftime('%H:%M')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
