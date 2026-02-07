@@ -315,7 +315,7 @@ class GenderStatisticsView(APIView):
 
 class DoctorConsultationViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    Doctor's consultation management
+    Doctor's consultation mana gement
 
     Endpoints:
     - GET /api/doctor/consultations/             - List all consultations

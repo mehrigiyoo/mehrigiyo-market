@@ -264,21 +264,16 @@ class ConsultationDetailSerializer(serializers.ModelSerializer):
     Doctor uchun batafsil konsultatsiya ma'lumoti
     """
 
-    # Client ma'lumotlari
     client_id = serializers.IntegerField(source='client.id', read_only=True)
     client_name = serializers.SerializerMethodField()
     client_phone = serializers.CharField(source='client.phone', read_only=True)
     client_avatar = serializers.SerializerMethodField()
 
-    # Vaqt ma'lumotlari
     date = serializers.SerializerMethodField()
     time = serializers.SerializerMethodField()
 
-    # Chat room
     chat_room_id = serializers.IntegerField(source='chat_room.id', read_only=True, allow_null=True)
-    chat_room_name = serializers.CharField(source='chat_room.name', read_only=True, allow_null=True)
 
-    # Status
     is_paid = serializers.SerializerMethodField()
     can_accept = serializers.SerializerMethodField()
 
@@ -298,7 +293,6 @@ class ConsultationDetailSerializer(serializers.ModelSerializer):
             'is_paid',
             'can_accept',
             'chat_room_id',
-            'chat_room_name',
             'created_at',
             'paid_at',
             'accepted_at',
@@ -307,34 +301,100 @@ class ConsultationDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_is_paid(self, obj):
-        """To'langanmi?"""
         return obj.status in ['paid', 'accepted', 'in_progress', 'completed']
 
     def get_client_name(self, obj):
-        """Client nomi"""
-        first_name = obj.client.first_name or ''
-        last_name = obj.client.last_name or ''
-        full_name = f"{first_name} {last_name}".strip()
+        """
+        Client nomi
 
-        if not full_name:
-            return obj.client.phone
+        DEBUG: print qilib tekshirish
+        """
+        import logging
+        logger = logging.getLogger(__name__)
 
-        return full_name
+        # DEBUG
+        logger.info(f"Client ID: {obj.client.id}")
+        logger.info(f"First name: '{obj.client.first_name}'")
+        logger.info(f"Last name: '{obj.client.last_name}'")
+        logger.info(f"Phone: '{obj.client.phone}'")
+
+        first_name = str(obj.client.first_name or '').strip()
+        last_name = str(obj.client.last_name or '').strip()
+
+        # To'liq ism
+        if first_name and last_name:
+            logger.info(f"Returning full name: {first_name} {last_name}")
+            return f"{first_name} {last_name}"
+
+        # Faqat first_name
+        if first_name:
+            logger.info(f"Returning first name: {first_name}")
+            return first_name
+
+        # Telefon
+        phone = str(obj.client.phone or '').strip()
+        if phone:
+            # Format: +998 94 935 57 57
+            if phone.startswith('998') and len(phone) == 12:
+                formatted = f"+998 {phone[3:5]} {phone[5:8]} {phone[8:10]} {phone[10:]}"
+                logger.info(f"Returning formatted phone: {formatted}")
+                return formatted
+            elif len(phone) >= 9:
+                formatted = f"+{phone}"
+                logger.info(f"Returning phone: {formatted}")
+                return formatted
+            logger.info(f"Returning raw phone: {phone}")
+            return phone
+
+        logger.info("Returning default: Mijoz")
+        return "Mijoz"
 
     def get_client_avatar(self, obj):
-        """Client avatar URL"""
-        if hasattr(obj.client, 'avatar') and obj.client.avatar:
-            return obj.client.avatar.url
-        return None
+        """
+        Client avatar - to'liq URL
+
+        VARIANT 1: Request context bilan
+        VARIANT 2: Manual domain qo'shish
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        if not hasattr(obj.client, 'avatar'):
+            logger.warning(f"Client {obj.client.id} has no avatar attribute")
+            return None
+
+        if not obj.client.avatar:
+            logger.info(f"Client {obj.client.id} avatar is empty")
+            return None
+
+        avatar_url = obj.client.avatar.url
+        logger.info(f"Avatar URL: {avatar_url}")
+
+        # VARIANT 1: Request context
+        request = self.context.get('request')
+        if request:
+            full_url = request.build_absolute_uri(avatar_url)
+            logger.info(f"Full URL (with context): {full_url}")
+            return full_url
+
+        # VARIANT 2: Manual domain
+        # MEDIA_URL = '/media/' bo'lsa
+        if not avatar_url.startswith('http'):
+            # settings.py dan SITE_URL yoki qo'lda
+            domain = 'http://imorganic.uz'  # Yoki settings.SITE_URL
+            full_url = f"{domain}{avatar_url}"
+            logger.info(f"Full URL (manual): {full_url}")
+            return full_url
+
+        logger.info(f"Returning raw URL: {avatar_url}")
+        return avatar_url
 
     def get_date(self, obj):
-        """Konsultatsiya sanasi"""
         if obj.availability_slot:
             return obj.availability_slot.date.strftime('%Y-%m-%d')
         return obj.requested_date.strftime('%Y-%m-%d')
 
     def get_time(self, obj):
-        """Konsultatsiya vaqti (formatted)"""
         if obj.availability_slot:
             start = obj.availability_slot.start_time.strftime('%H:%M')
             end = obj.availability_slot.end_time.strftime('%H:%M')
@@ -342,7 +402,6 @@ class ConsultationDetailSerializer(serializers.ModelSerializer):
         return obj.requested_time.strftime('%H:%M')
 
     def get_can_accept(self, obj):
-        """Doctor qabul qila oladimi?"""
         return obj.status == 'paid'
 
 
