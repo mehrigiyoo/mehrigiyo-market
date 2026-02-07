@@ -2,7 +2,7 @@ import datetime
 import pytz
 from django.db import transaction, models
 from django.db.utils import IntegrityError
-from django.db.models import Count, Avg
+from django.db.models import Count, Avg, Prefetch
 from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 from rest_framework import generics
 
 from account.models import SmsCode
+from client.models import ClientProfile
 from consultation.models import ConsultationRequest
 from .permissions import IsDoctor
 from .serializers import TypeDoctorSerializer, AdvertisingSerializer, \
@@ -331,10 +332,8 @@ class DoctorConsultationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ConsultationDetailSerializer
 
     def get_queryset(self):
-        """Get consultations for current doctor"""
         user = self.request.user
 
-        # Faqat doctorlar kirishi mumkin
         if user.role != 'doctor':
             return ConsultationRequest.objects.none()
 
@@ -345,6 +344,11 @@ class DoctorConsultationViewSet(viewsets.ReadOnlyModelViewSet):
             'doctor',
             'availability_slot',
             'chat_room'
+        ).prefetch_related(
+            Prefetch(
+                'client__client_profile',
+                queryset=ClientProfile.objects.all()
+            )
         ).order_by('-created_at')
 
     @action(detail=False, methods=['get'])

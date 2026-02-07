@@ -306,32 +306,28 @@ class ConsultationDetailSerializer(serializers.ModelSerializer):
         return obj.status in ['paid', 'accepted', 'in_progress', 'completed']
 
     def get_client_name(self, obj):
-        """
-        Client nomi
+        """Client nomi - ClientProfile.full_name dan"""
+        # ClientProfile.full_name
+        if hasattr(obj.client, 'client_profile'):
+            try:
+                client_profile = obj.client.client_profile
+                full_name = str(client_profile.full_name or '').strip()
+                if full_name:
+                    return full_name
+            except Exception:
+                pass
 
-        Priority:
-        1. full_name field
-        2. first_name + last_name
-        3. "Mijoz" (default) - telefon EMAS!
-        """
-        # 1. full_name field
-        if hasattr(obj.client, 'full_name'):
-            full_name = str(obj.client.full_name or '').strip()
-            if full_name:
-                return full_name
-
-        # 2. first_name + last_name
+        # UserModel: first_name + last_name
         if hasattr(obj.client, 'first_name') and hasattr(obj.client, 'last_name'):
             first_name = str(obj.client.first_name or '').strip()
             last_name = str(obj.client.last_name or '').strip()
 
             if first_name and last_name:
                 return f"{first_name} {last_name}"
-
             if first_name:
                 return first_name
 
-        # 3. Default - telefon EMAS!
+        # Default
         return "Mijoz"
 
     def get_client_avatar(self, obj):
@@ -382,14 +378,18 @@ class ConsultationListSerializer(serializers.ModelSerializer):
         ]
 
     def get_client_name(self, obj):
-        """Client nomi"""
-        # full_name
-        if hasattr(obj.client, 'full_name'):
-            full_name = str(obj.client.full_name or '').strip()
-            if full_name:
-                return full_name
+        """Client nomi - ClientProfile.full_name dan"""
+        # ClientProfile.full_name
+        if hasattr(obj.client, 'client_profile'):
+            try:
+                client_profile = obj.client.client_profile
+                full_name = str(client_profile.full_name or '').strip()
+                if full_name:
+                    return full_name
+            except Exception:
+                pass
 
-        # first_name + last_name
+        # UserModel: first_name + last_name
         if hasattr(obj.client, 'first_name') and hasattr(obj.client, 'last_name'):
             first_name = str(obj.client.first_name or '').strip()
             last_name = str(obj.client.last_name or '').strip()
@@ -399,15 +399,7 @@ class ConsultationListSerializer(serializers.ModelSerializer):
             if first_name:
                 return first_name
 
-        # Telefon
-        phone = str(obj.client.phone or '').strip()
-        if phone:
-            if phone.startswith('998') and len(phone) == 12:
-                return f"+998 {phone[3:5]} {phone[5:8]} {phone[8:10]} {phone[10:]}"
-            elif len(phone) >= 9:
-                return f"+{phone}"
-            return phone
-
+        # Default
         return "Mijoz"
 
     def get_date(self, obj):
