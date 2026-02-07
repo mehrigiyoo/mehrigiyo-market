@@ -5,36 +5,154 @@ from .models import ConsultationRequest, DoctorAvailability
 
 
 class ConsultationRequestSerializer(serializers.ModelSerializer):
-    """Consultation request serializer"""
+    """
+    Client uchun konsultatsiya serializer
+    """
 
-    client_name = serializers.CharField(source='client.full_name', read_only=True)
-    client_phone = serializers.CharField(source='client.phone', read_only=True)
-    doctor_name = serializers.CharField(source='doctor.full_name', read_only=True)
+    # Doctor ma'lumotlari
+    doctor_id = serializers.IntegerField(source='doctor.id', read_only=True)
+    doctor_name = serializers.SerializerMethodField()
     doctor_avatar = serializers.SerializerMethodField()
+    doctor_type = serializers.SerializerMethodField()
 
-    is_paid = serializers.BooleanField(read_only=True)
+    # Vaqt ma'lumotlari
+    date = serializers.SerializerMethodField()
+    time = serializers.SerializerMethodField()
 
-    # Slot ma'lumotlari
-    slot_date = serializers.DateField(source='availability_slot.date', read_only=True)
-    slot_start_time = serializers.TimeField(source='availability_slot.start_time', read_only=True)
-    slot_end_time = serializers.TimeField(source='availability_slot.end_time', read_only=True)
+    # Chat room
+    chat_room_id = serializers.IntegerField(source='chat_room.id', read_only=True, allow_null=True)
+    chat_room_active = serializers.BooleanField(source='chat_room.is_active', read_only=True, allow_null=True)
+
+    # Status info
+    is_paid = serializers.SerializerMethodField()
+    can_cancel = serializers.SerializerMethodField()
 
     class Meta:
         model = ConsultationRequest
         fields = [
-            'id', 'client', 'client_name', 'client_phone',
-            'doctor', 'doctor_name', 'doctor_avatar',
-            'requested_date', 'requested_time',
-            'slot_date', 'slot_start_time', 'slot_end_time',
-            'status', 'is_paid', 'reason',
-            'created_at', 'paid_at', 'accepted_at', 'completed_at'
+            'id',
+            'doctor_id',
+            'doctor_name',
+            'doctor_avatar',
+            'doctor_type',
+            'date',
+            'time',
+            'reason',
+            'notes',
+            'status',
+            'is_paid',
+            'can_cancel',
+            'chat_room_id',
+            'chat_room_active',
+            'created_at',
+            'paid_at',
+            'accepted_at',
+            'started_at',
+            'completed_at',
         ]
-        read_only_fields = ['id', 'client', 'created_at']
+
+    def get_doctor_name(self, obj):
+        """Doctor nomi"""
+        try:
+            doctor = Doctor.objects.get(user=obj.doctor)
+            return doctor.full_name
+        except:
+            return obj.doctor.first_name or obj.doctor.phone
 
     def get_doctor_avatar(self, obj):
-        if obj.doctor.avatar:
-            return obj.doctor.avatar.url
+        """Doctor avatar"""
+        try:
+            doctor = Doctor.objects.get(user=obj.doctor)
+            if doctor.avatar:
+                return doctor.avatar.url
+        except:
+            pass
         return None
+
+    def get_doctor_type(self, obj):
+        try:
+            doctor = Doctor.objects.get(user=obj.doctor)
+            if doctor.type_doctor:
+                # Enum bo'lsa
+                if hasattr(doctor.type_doctor, 'value'):
+                    return doctor.type_doctor.value  # ← "Terapevt"
+                # String ga aylantirish
+                return str(doctor.type_doctor)  # ← "Terapevt"
+        except:
+            pass
+        return None
+
+    def get_date(self, obj):
+        """Konsultatsiya sanasi"""
+        if obj.availability_slot:
+            return obj.availability_slot.date.strftime('%Y-%m-%d')
+        return obj.requested_date.strftime('%Y-%m-%d')
+
+    def get_time(self, obj):
+        """Konsultatsiya vaqti"""
+        if obj.availability_slot:
+            start = obj.availability_slot.start_time.strftime('%H:%M')
+            end = obj.availability_slot.end_time.strftime('%H:%M')
+            return f"{start} - {end}"
+        return obj.requested_time.strftime('%H:%M')
+
+    def get_is_paid(self, obj):
+        """To'langanmi?"""
+        return obj.status in ['paid', 'accepted', 'in_progress', 'completed']
+
+    def get_can_cancel(self, obj):
+        """Bekor qilish mumkinmi?"""
+        return obj.status not in ['completed', 'cancelled']
+
+
+class ConsultationListSerializer(serializers.ModelSerializer):
+    """
+    Qisqa ma'lumot (list uchun)
+    """
+
+    doctor_name = serializers.SerializerMethodField()
+    doctor_type = serializers.SerializerMethodField()
+    date = serializers.SerializerMethodField()
+    time = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ConsultationRequest
+        fields = [
+            'id',
+            'doctor_name',
+            'doctor_type',
+            'date',
+            'time',
+            'status',
+            'reason',
+            'created_at',
+        ]
+
+    def get_doctor_name(self, obj):
+        try:
+            doctor = Doctor.objects.get(user=obj.doctor)
+            return doctor.full_name
+        except:
+            return obj.doctor.first_name or obj.doctor.phone
+
+    def get_doctor_type(self, obj):
+        try:
+            doctor = Doctor.objects.get(user=obj.doctor)
+            return doctor.type_doctor
+        except:
+            return None
+
+    def get_date(self, obj):
+        if obj.availability_slot:
+            return obj.availability_slot.date.strftime('%Y-%m-%d')
+        return obj.requested_date.strftime('%Y-%m-%d')
+
+    def get_time(self, obj):
+        if obj.availability_slot:
+            start = obj.availability_slot.start_time.strftime('%H:%M')
+            end = obj.availability_slot.end_time.strftime('%H:%M')
+            return f"{start} - {end}"
+        return obj.requested_time.strftime('%H:%M')
 
 
 class ConsultationCreateSerializer(serializers.Serializer):

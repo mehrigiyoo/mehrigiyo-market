@@ -2,7 +2,8 @@ from django.db import transaction, models
 from django.db.models import OuterRef, Exists, Count, BooleanField, Value, Avg
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import generics
+from rest_framework import generics, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -13,6 +14,8 @@ from client.serializer import ClientRegisterSerializer, ClientProfileSerializer,
     ClientAddressSerializer
 from config.responses import ResponseSuccess
 from config.validators import normalize_phone
+from consultation.models import ConsultationRequest
+from consultation.serializers import ConsultationRequestSerializer
 from shop.models import Medicine
 from shop.serializers import MedicineSerializer
 
@@ -204,3 +207,125 @@ class FavoriteMedicineListAPIView(generics.ListAPIView):
             .select_related('type_medicine')
             .prefetch_related('pictures')
         )
+
+
+
+
+
+
+
+
+
+# Client Consultation History API
+
+
+class ClientConsultationViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Client's consultation management
+
+    Endpoints:
+    - GET /api/client/consultations/              - Barcha konsultatsiyalar
+    - GET /api/client/consultations/active/       - Faol (paid, accepted, in_progress)
+    - GET /api/client/consultations/history/      - Tugatilgan va bekor qilingan
+    - GET /api/client/consultations/{id}/         - Detail
+    - POST /api/client/consultations/{id}/cancel/ - Bekor qilish
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = ConsultationRequestSerializer
+
+    def get_queryset(self):
+        """Get consultations for current client"""
+        user = self.request.user
+
+        # Faqat clientlar kirishi mumkin
+        if user.role != 'client':
+            return ConsultationRequest.objects.none()
+
+        return ConsultationRequest.objects.filter(
+            client=user
+        ).select_related(
+            'doctor',
+            'availability_slot',
+            'chat_room'
+        ).order_by('-created_at')
+
+    @action(detail=False, methods=['get'])
+    def active(self, request):
+        """
+        Faol konsultatsiyalar
+
+        GET /api/client/consultations/active/
+
+        Status: paid, accepted, in_progress
+        """
+        consultations = self.get_queryset().filter(
+            status__in=['paid', 'accepted', 'in_progress']
+        )
+
+        serializer = self.get_serializer(consultations, many=True)
+        return Response({
+            'count': consultations.count(),
+            'results': serializer.data
+        })
+
+    @action(detail=False, methods=['get'])
+    def history(self, request):
+        """
+        Tarix (tugatilgan va bekor qilingan)
+
+        GET /api/client/consultations/history/
+
+        Status: completed, cancelled
+        """
+        consultations = self.get_queryset().filter(
+            status__in=['completed', 'cancelled']
+        )
+
+        serializer = self.get_serializer(consultations, many=True)
+        return Response({
+            'count': consultations.count(),
+            'results': serializer.data
+        })
+
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        """
+        Konsultatsiyani bekor qilish
+
+        POST /api/client/consultations/{id}/cancel/
+        """
+        consultation = self.get_object()
+
+        # Faqat o'z konsultatsiyasini bekor qilishi mumkin
+        if consultation.client != request.user:
+            return Response(
+                {'error': 'This is not your consultation'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Faqat completed va cancelled bo'lmagan konsultatsiyalarni bekor qilish mumkin
+        if consultation.status in ['completed', 'cancelled']:
+            return Response(
+                {'error': f'Cannot cancel consultation with status {consultation.status}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Bekor qilish
+        try:
+            consultation.cancel()
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to cancel consultation {consultation.id}: {e}")
+            return Response(
+                {'error': f'Failed to cancel consultation: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        return Response({
+            'consultation_id': consultation.id,
+            'status': consultation.status,
+            'message': 'Consultation cancelled successfully'
+        })
+

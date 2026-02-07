@@ -3,8 +3,6 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from datetime import date, timedelta
-
-from specialist.models import Doctor
 from .models import ConsultationRequest, DoctorAvailability
 from .serializers import ConsultationRequestSerializer
 
@@ -115,7 +113,9 @@ class ConsultationViewSet(viewsets.ModelViewSet):
         """
         Create consultation by selecting a slot
 
-        POST /api/consultations/create/
+        YANGI MANTIQ: Client DOIM muvaffaqiyatli yoziladi
+
+        POST /api/consultations/create_consultation/
         {
             "slot_id": 123,
             "reason": "Bosh og'rig'i" (optional)
@@ -145,31 +145,6 @@ class ConsultationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # ❌ AGAR SLOT BAND BO'LSA - Telegram botga xabar yuborish
-        if not availability_slot.is_available:
-            # Get doctor info
-            try:
-                doctor = Doctor.objects.get(user=availability_slot.doctor)
-            except Doctor.DoesNotExist:
-                doctor = None
-
-            # Botga yuborish
-            self._send_telegram_failed_booking(
-                client=request.user,
-                doctor=doctor,
-                slot=availability_slot
-            )
-
-            logger.warning(
-                f"❌ Client {request.user.id} tried to book unavailable slot {slot_id}. "
-                f"Already booked by Client {availability_slot.consultation.client.id if availability_slot.consultation else 'Unknown'}"
-            )
-
-            return Response(
-                {'error': 'This time slot is not available or does not exist'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         # Get doctor info
         try:
             doctor = Doctor.objects.get(user=availability_slot.doctor)
@@ -186,7 +161,10 @@ class ConsultationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # ✅ Create consultation
+        # ✅ YANGI: Slot statusini tekshirish (band yoki bo'sh)
+        slot_was_available = availability_slot.is_available
+
+        # ✅ Create consultation (DOIM yaratiladi - slot band bo'lsa ham)
         consultation = ConsultationRequest.objects.create(
             client=request.user,
             doctor=availability_slot.doctor,
@@ -197,16 +175,39 @@ class ConsultationViewSet(viewsets.ModelViewSet):
             status='created'
         )
 
-        # Book the slot
-        availability_slot.book(consultation)
+        # Agar slot bo'sh bo'lsa - avtomatik book qilish
+        if slot_was_available:
+            # Slotni band qilish
+            availability_slot.book(consultation)
+            logger.info(f"✅ Slot {slot_id} booked for consultation {consultation.id}")
+        else:
+            # Slot band - lekin konsultatsiya yaratildi (navbatda)
+            logger.warning(
+                f"⚠️ Slot {slot_id} already booked, but consultation {consultation.id} created anyway. "
+                f"Slot was booked by consultation {availability_slot.consultation.id if availability_slot.consultation else 'Unknown'}"
+            )
 
         # Mark as paid (for testing)
         consultation.mark_as_paid()
 
-        # ✅ MUVAFFAQIYATLI - Botga va doctorga xabar yuborish
-        self._send_consultation_notifications(consultation)
+        # 📱 NOTIFICATIONS
 
-        logger.info(f"✅ Client {request.user.id} successfully booked slot {slot_id}")
+        if slot_was_available:
+            # ✅ Slot bo'sh edi - muvaffaqiyatli
+            self._send_consultation_notifications(consultation)
+            logger.info(f"✅ Success notifications sent for consultation {consultation.id}")
+        else:
+            # ⚠️ Slot band edi - yangi konsultatsiya (navbat)
+            # Doctor FCM yuboramiz (yangi konsultatsiya haqida)
+            self._send_consultation_notifications(consultation)
+
+            # Telegram botga alohida xabar (slot band edi)
+            self._send_telegram_success_booking(
+                consultation=consultation,
+                doctor=doctor,
+                slot=availability_slot
+            )
+            logger.warning(f"⚠️ Slot occupied notification sent for consultation {consultation.id}")
 
         return Response({
             'consultation_id': consultation.id,
@@ -218,7 +219,67 @@ class ConsultationViewSet(viewsets.ModelViewSet):
             },
             'date': str(availability_slot.date),
             'time': f"{availability_slot.start_time.strftime('%H:%M')} - {availability_slot.end_time.strftime('%H:%M')}",
+            'slot_was_available': slot_was_available,
+            'message': 'Konsultatsiya muvaffaqiyatli yaratildi' if slot_was_available else 'Konsultatsiya yaratildi'
         }, status=status.HTTP_201_CREATED)
+
+    def _send_telegram_success_booking(self, consultation, doctor, slot):
+        """
+        ⚠️ Slot band bo'lganda yangi konsultatsiya yaratilganini bildirish
+
+        Bu holat: Client yozildi, lekin slot allaqachon band edi
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        doctor_name = doctor.full_name if doctor else "Unknown Doctor"
+        doctor_user_id = doctor.user.id if doctor else "N/A"
+        doctor_type = doctor.type_doctor if doctor else "N/A"
+
+        # # Kim tomonidan band qilingan
+        # booked_by = "Unknown"
+        # booked_by_id = "N/A"
+        # if slot.consultation and slot.consultation.client:
+        #     booked_by = f"{slot.consultation.client.first_name or 'Ism yoq'} {slot.consultation.client.last_name or ''}"
+        #     booked_by_id = slot.consultation.client.id
+
+        message = f"""
+    ━━━━━━━━━━━━━━━━━━━━━━━━
+    ⚠️ NAVBATGA YOZILDI (Slot band edi)
+    ━━━━━━━━━━━━━━━━━━━━━━━━
+
+    📋 Konsultatsiya ID: #{consultation.id}
+    ✅ Status: YARATILDI
+
+    👤 Yangi Mijoz:
+    👤 Ism: {consultation.client.first_name or 'Ism yoq'} {consultation.client.last_name or ''}
+    📞 Telefon: +{consultation.client.phone}
+    🆔 Client User ID: {consultation.client.id}
+
+    🏥 Doctor Name: {doctor_name}
+    🆔 Doctor User ID: {doctor_user_id}
+    🏥 Doctor Type: {doctor_type}
+
+    📅 Sana: {slot.date.strftime('%d.%m.%Y')}
+    🕐 Vaqt: {slot.start_time.strftime('%H:%M')} - {slot.end_time.strftime('%H:%M')}
+
+    💰 Narx: {doctor.consultation_price:,.0f} so'm
+    💬 Sabab: {consultation.reason or 'Sabab korsatilmagan'}
+
+    ⚠️ ESLATMA: Bu vaqt allaqachon band!
+
+    ℹ️ Yangi konsultatsiya yaratildi, lekin navbatda
+    ━━━━━━━━━━━━━━━━━━━━━━━━
+    """
+
+        logger.warning(f"📤 Telegram SLOT OCCUPIED notification:\n{message}")
+
+        try:
+            from utils.telegram import send_to_bot
+            send_to_bot(message)
+            logger.info(f"✅ Telegram slot occupied notification sent")
+        except Exception as e:
+            logger.error(f"❌ Failed to send Telegram notification: {e}")
 
     def _send_consultation_notifications(self, consultation):
         """
@@ -259,106 +320,56 @@ class ConsultationViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f"❌ Failed to send Telegram: {e}")
 
-    def _send_telegram_success_booking(self, consultation):
-        """
-        ✅ MUVAFFAQIYATLI YOZILGANDA Telegram botga yuborish
-        """
-        import logging
-        logger = logging.getLogger(__name__)
+#     def _send_telegram_success_booking(self, consultation):
+#         """
+#         ✅ MUVAFFAQIYATLI YOZILGANDA Telegram botga yuborish
+#         """
+#         import logging
+#         logger = logging.getLogger(__name__)
+#
+#         try:
+#             doctor = Doctor.objects.get(user=consultation.doctor)
+#             doctor_name = doctor.full_name
+#             doctor_price = doctor.consultation_price
+#             doctor_type = doctor.type_doctor if doctor else "N/A"
+#         except:
+#             doctor_name = consultation.doctor.first_name or "Unknown"
+#             doctor_price = 0
+#
+#         message = f"""
+# ━━━━━━━━━━━━━━━━━━━━━━━━
+# ✅ YANGI KONSULTATSIYA #{consultation.id}
+# ━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# 👤 Mijoz: {consultation.client.first_name or 'Ism yoq'} {consultation.client.last_name or ''}
+# 📞 Telefon: +{consultation.client.phone}
+# 🆔 Client User ID: {consultation.client.id}
+#
+# 🏥 Doctor: {doctor_name}
+# 🆔 Doctor User ID: {consultation.doctor.id}
+# 🏥 Doctor Type: {doctor_type}
+#
+# 📅 Sana: {consultation.requested_date.strftime('%d.%m.%Y')}
+# 🕐 Vaqt: {consultation.requested_time.strftime('%H:%M')}
+#
+# 💰 Narx: {doctor_price:,.0f} so'm
+# ✅ Status: PAID (To'langan)
+#
+# 💬 Sabab: {consultation.reason or 'Sabab korsatilmagan'}
+# ━━━━━━━━━━━━━━━━━━━━━━━━
+# """
+#
+#         logger.info(f"📤 Telegram SUCCESS notification:\n{message}")
+#
+#         # TODO: Telegram botga yuborish
+#         from utils.telegram import send_to_bot
+#         send_to_bot(message)
 
-        try:
-            doctor = Doctor.objects.get(user=consultation.doctor)
-            doctor_name = doctor.full_name
-            doctor_price = doctor.consultation_price
-            doctor_type = doctor.type_doctor if doctor else "N/A"
-        except:
-            doctor_name = consultation.doctor.first_name or "Unknown"
-            doctor_price = 0
-
-        message = f"""
-━━━━━━━━━━━━━━━━━━━━━━━━
-✅ YANGI KONSULTATSIYA #{consultation.id}
-━━━━━━━━━━━━━━━━━━━━━━━━
-
-👤 Mijoz: {consultation.client.first_name or 'Ism yoq'} {consultation.client.last_name or ''}
-📞 Telefon: +{consultation.client.phone}
-🆔 Client User ID: {consultation.client.id}
-
-🏥 Doctor: {doctor_name}
-🆔 Doctor User ID: {consultation.doctor.id}
-🏥 Doctor Type: {doctor_type}
-
-📅 Sana: {consultation.requested_date.strftime('%d.%m.%Y')}
-🕐 Vaqt: {consultation.requested_time.strftime('%H:%M')}
-
-💰 Narx: {doctor_price:,.0f} so'm
-✅ Status: PAID (To'langan)
-
-💬 Sabab: {consultation.reason or 'Sabab korsatilmagan'}
-━━━━━━━━━━━━━━━━━━━━━━━━
-"""
-
-        logger.info(f"📤 Telegram SUCCESS notification:\n{message}")
-
-        # TODO: Telegram botga yuborish
-        from utils.telegram import send_to_bot
-        send_to_bot(message)
-
-    def _send_telegram_failed_booking(self, client, doctor, slot):
-        """
-        ❌ YOZILA OLMAGAN holat uchun Telegram botga yuborish
-
-        Args:
-            client: Client user object
-            doctor: Doctor object (or None)
-            slot: DoctorAvailability object
-        """
-        import logging
-        logger = logging.getLogger(__name__)
-
-        doctor_name = doctor.full_name if doctor else "Unknown Doctor"
-        doctor_user_id = doctor.user.id if doctor else "N/A"
-        doctor_type = doctor.type_doctor if doctor else "N/A"
-
-        # # Kim tomonidan band qilingan
-        # booked_by = "Unknown"
-        # booked_by_id = "N/A"
-        # if slot.consultation and slot.consultation.client:
-        #     booked_by = f"{slot.consultation.client.client.full_name or 'Ism yoq'}"
-        #     booked_by_id = slot.consultation.client.id
-
-        message = f"""
-━━━━━━━━━━━━━━━━━━━━━━━━
-❌ YOZILA OLMADI (Slot band)
-━━━━━━━━━━━━━━━━━━━━━━━━
-
-😞 Mijoz (yozila olmagan):
-👤 Ism: {client.first_name or 'Ism yoq'} {client.last_name or ''}
-📞 Telefon: +{client.phone}
-🆔 Client User ID: {client.id}
-
-🏥 Doctor Name: {doctor_name}
-🆔 Doctor User ID: {doctor_user_id}
-🏥 Doctor Type: {doctor_type}
-
-📅 Sana: {slot.date.strftime('%d.%m.%Y')}
-🕐 Vaqt: {slot.start_time.strftime('%H:%M')} - {slot.end_time.strftime('%H:%M')}
-
-⚠️ SABAB: Bu vaqt allaqachon band!
-━━━━━━━━━━━━━━━━━━━━━━━━
-"""
-
-        logger.warning(f"📤 Telegram FAILED notification:\n{message}")
-
-        # TODO: Telegram botga yuborish
-        from utils.telegram import send_to_bot
-        send_to_bot(message)
-
-    def _send_telegram_notification(self, consultation):
-        """
-        DEPRECATED: Use _send_telegram_success_booking instead
-        """
-        self._send_telegram_success_booking(consultation)
+    # def _send_telegram_notification(self, consultation):
+    #     """
+    #     DEPRECATED: Use _send_telegram_success_booking instead
+    #     """
+    #     self._send_telegram_success_booking(consultation)
 
     @action(detail=True, methods=['post'])
     def accept(self, request, pk=None):
