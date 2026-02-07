@@ -353,9 +353,18 @@ class DoctorConsultationViewSet(viewsets.ReadOnlyModelViewSet):
         Yangi konsultatsiyalar (to'langan, hali qabul qilinmagan)
 
         GET /api/doctor/consultations/new/
+
+        VARIANT 1: Faqat bugun
+        VARIANT 2: Bugun va kelajakdagi
         """
+        from datetime import date
+
+        today = date.today()
+
+        # Bugun va kelajakdagi konsultatsiyalar
         consultations = self.get_queryset().filter(
-            status='paid'
+            status='paid',
+            requested_date__gte=today
         )
 
         serializer = self.get_serializer(consultations, many=True)
@@ -363,6 +372,7 @@ class DoctorConsultationViewSet(viewsets.ReadOnlyModelViewSet):
             'count': consultations.count(),
             'results': serializer.data
         })
+
 
     @action(detail=False, methods=['get'])
     def active(self, request):
