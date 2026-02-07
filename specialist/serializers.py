@@ -259,6 +259,11 @@ class GenderStatisticsSerializer(serializers.Serializer):
 # Doctor Consultation SERIALIZERS
 
 
+from rest_framework import serializers
+from .models import ConsultationRequest
+from specialist.models import Doctor
+
+
 class ConsultationDetailSerializer(serializers.ModelSerializer):
     """
     Doctor uchun batafsil konsultatsiya ma'lumoti
@@ -287,8 +292,6 @@ class ConsultationDetailSerializer(serializers.ModelSerializer):
             'client_avatar',
             'date',
             'time',
-            'reason',
-            'notes',
             'status',
             'is_paid',
             'can_accept',
@@ -307,87 +310,51 @@ class ConsultationDetailSerializer(serializers.ModelSerializer):
         """
         Client nomi
 
-        DEBUG: print qilib tekshirish
+        Priority:
+        1. full_name field
+        2. first_name + last_name
+        3. Telefon (formatted)
+        4. "Mijoz"
         """
-        import logging
-        logger = logging.getLogger(__name__)
+        # 1. full_name field
+        if hasattr(obj.client, 'full_name'):
+            full_name = str(obj.client.full_name or '').strip()
+            if full_name:
+                return full_name
 
-        # DEBUG
-        logger.info(f"Client ID: {obj.client.id}")
-        logger.info(f"First name: '{obj.client.first_name}'")
-        logger.info(f"Last name: '{obj.client.last_name}'")
-        logger.info(f"Phone: '{obj.client.phone}'")
+        # 2. first_name + last_name
+        if hasattr(obj.client, 'first_name') and hasattr(obj.client, 'last_name'):
+            first_name = str(obj.client.first_name or '').strip()
+            last_name = str(obj.client.last_name or '').strip()
 
-        first_name = str(obj.client.first_name or '').strip()
-        last_name = str(obj.client.last_name or '').strip()
+            if first_name and last_name:
+                return f"{first_name} {last_name}"
 
-        # To'liq ism
-        if first_name and last_name:
-            logger.info(f"Returning full name: {first_name} {last_name}")
-            return f"{first_name} {last_name}"
+            if first_name:
+                return first_name
 
-        # Faqat first_name
-        if first_name:
-            logger.info(f"Returning first name: {first_name}")
-            return first_name
-
-        # Telefon
+        # 3. Telefon (formatted)
         phone = str(obj.client.phone or '').strip()
         if phone:
-            # Format: +998 94 935 57 57
+            # 998949355757 → +998 94 935 57 57
             if phone.startswith('998') and len(phone) == 12:
-                formatted = f"+998 {phone[3:5]} {phone[5:8]} {phone[8:10]} {phone[10:]}"
-                logger.info(f"Returning formatted phone: {formatted}")
-                return formatted
+                return f"+998 {phone[3:5]} {phone[5:8]} {phone[8:10]} {phone[10:]}"
             elif len(phone) >= 9:
-                formatted = f"+{phone}"
-                logger.info(f"Returning phone: {formatted}")
-                return formatted
-            logger.info(f"Returning raw phone: {phone}")
+                return f"+{phone}"
             return phone
 
-        logger.info("Returning default: Mijoz")
+        # 4. Default
         return "Mijoz"
 
     def get_client_avatar(self, obj):
-        """
-        Client avatar - to'liq URL
+        if hasattr(obj.client, 'avatar') and obj.client.avatar:
+            avatar_url = obj.client.avatar.url
 
-        VARIANT 1: Request context bilan
-        VARIANT 2: Manual domain qo'shish
-        """
-        import logging
-        logger = logging.getLogger(__name__)
+            # Request dan avtomatik domain
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(avatar_url)
 
-        if not hasattr(obj.client, 'avatar'):
-            logger.warning(f"Client {obj.client.id} has no avatar attribute")
-            return None
-
-        if not obj.client.avatar:
-            logger.info(f"Client {obj.client.id} avatar is empty")
-            return None
-
-        avatar_url = obj.client.avatar.url
-        logger.info(f"Avatar URL: {avatar_url}")
-
-        # VARIANT 1: Request context
-        request = self.context.get('request')
-        if request:
-            full_url = request.build_absolute_uri(avatar_url)
-            logger.info(f"Full URL (with context): {full_url}")
-            return full_url
-
-        # VARIANT 2: Manual domain
-        # MEDIA_URL = '/media/' bo'lsa
-        if not avatar_url.startswith('http'):
-            # settings.py dan SITE_URL yoki qo'lda
-            domain = 'http://imorganic.uz'  # Yoki settings.SITE_URL
-            full_url = f"{domain}{avatar_url}"
-            logger.info(f"Full URL (manual): {full_url}")
-            return full_url
-
-        logger.info(f"Returning raw URL: {avatar_url}")
-        return avatar_url
 
     def get_date(self, obj):
         if obj.availability_slot:
@@ -424,15 +391,37 @@ class ConsultationListSerializer(serializers.ModelSerializer):
             'date',
             'time',
             'status',
-            'reason',
             'created_at',
         ]
 
     def get_client_name(self, obj):
-        first_name = obj.client.first_name or ''
-        last_name = obj.client.last_name or ''
-        full_name = f"{first_name} {last_name}".strip()
-        return full_name or obj.client.phone
+        """Client nomi"""
+        # full_name
+        if hasattr(obj.client, 'full_name'):
+            full_name = str(obj.client.full_name or '').strip()
+            if full_name:
+                return full_name
+
+        # first_name + last_name
+        if hasattr(obj.client, 'first_name') and hasattr(obj.client, 'last_name'):
+            first_name = str(obj.client.first_name or '').strip()
+            last_name = str(obj.client.last_name or '').strip()
+
+            if first_name and last_name:
+                return f"{first_name} {last_name}"
+            if first_name:
+                return first_name
+
+        # Telefon
+        phone = str(obj.client.phone or '').strip()
+        if phone:
+            if phone.startswith('998') and len(phone) == 12:
+                return f"+998 {phone[3:5]} {phone[5:8]} {phone[8:10]} {phone[10:]}"
+            elif len(phone) >= 9:
+                return f"+{phone}"
+            return phone
+
+        return "Mijoz"
 
     def get_date(self, obj):
         if obj.availability_slot:
@@ -445,11 +434,6 @@ class ConsultationListSerializer(serializers.ModelSerializer):
             end = obj.availability_slot.end_time.strftime('%H:%M')
             return f"{start} - {end}"
         return obj.requested_time.strftime('%H:%M')
-
-
-
-
-
 
 
 
