@@ -128,7 +128,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _send_fcm(self, user, message):
         """Send FCM notification"""
-        # ✅ Get sender display name
+        # Get sender display name
         sender_name = self._get_user_full_name(self.user)
 
         send_fcm(
@@ -209,7 +209,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         """
         message_data = event['message']
 
-        # ✅ Calculate is_mine for THIS user
+        # Calculate is_mine for THIS user
         sender_id = message_data.get('sender', {}).get('id')
         current_user_id = self.user.id
 
@@ -338,7 +338,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         """
         base_url = self._get_base_url()
 
-        # ✅ Sender full_name olish
+        # Sender full_name olish
         sender_full_name = self._get_user_full_name(message.sender)
 
         data = {
@@ -348,7 +348,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'sender': {
                 'id': message.sender.id,
                 'phone': message.sender.phone,
-                'full_name': sender_full_name,  # ✅ full_name
+                'full_name': sender_full_name,  # full_name
                 'role': message.sender.role,
             },
             'message_type': message.message_type,
@@ -386,7 +386,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         # Reply to
         if message.reply_to:
-            # ✅ Reply sender full_name
+            # Reply sender full_name
             reply_sender_full_name = self._get_user_full_name(message.reply_to.sender)
 
             data['reply_to'] = {
@@ -394,7 +394,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 'sender': {
                     'id': message.reply_to.sender.id,
                     'phone': message.reply_to.sender.phone,
-                    'full_name': reply_sender_full_name,  # ✅ full_name
+                    'full_name': reply_sender_full_name,  # full_name
                 },
                 'text': message.reply_to.text[:100] if message.reply_to.text else '',
                 'message_type': message.reply_to.message_type,
@@ -410,7 +410,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         full_name = ''
         gender = None
 
-        # ✅ Client
+        # Client
         if hasattr(user, 'client_profile'):
             try:
                 full_name = (user.client_profile.full_name or '').strip()
@@ -418,7 +418,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             except:
                 pass
 
-        # ✅ Doctor
+        # Doctor
         elif hasattr(user, 'doctor'):
             try:
                 full_name = (user.doctor.full_name or '').strip()
@@ -433,7 +433,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         return {
             'id': user.id,
             'phone': user.phone,
-            'full_name': full_name,  # ✅ To'liq ism
+            'full_name': full_name,  # To'liq ism
             'gender': gender,
         }
 
@@ -473,8 +473,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             room_id=self.room_id
         ).select_related(
             'sender',
-            'sender__client_profile',  # ✅ ClientProfile
-            'sender__doctor',  # ✅ Doctor
+            'sender__client_profile',  # ClientProfile
+            'sender__doctor',  # Doctor
             'reply_to__sender',
             'reply_to__sender__client_profile',
             'reply_to__sender__doctor'
@@ -488,8 +488,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             status__in=['ended', 'missed', 'rejected']
         ).select_related(
             'caller',
-            'caller__client_profile',  # ✅ ClientProfile
-            'caller__doctor',  # ✅ Doctor
+            'caller__client_profile',
+            'caller__doctor',
             'receiver',
             'receiver__client_profile',
             'receiver__doctor'

@@ -232,19 +232,19 @@ class DoctorChatRoomViewSet(viewsets.ReadOnlyModelViewSet):
 
     permission_classes = [IsAuthenticated]
 
-    # def get_queryset(self):
-    #     """Get chat rooms for current doctor"""
-    #     user = self.request.user
-    #
-    #     # Faqat doctorlar kirishi mumkin
-    #     if user.role != 'doctor':
-    #         return ChatRoom.objects.none()
-    #
-    #     # Doctor ishtirok etgan barcha chat roomlar
-    #     return ChatRoom.objects.filter(
-    #         room_type='1:1',
-    #         participants=user
-    #     ).prefetch_related('participants').order_by('-updated_at')
+    def get_queryset(self):
+        """Get chat rooms for current doctor"""
+        user = self.request.user
+
+        # Faqat doctorlar kirishi mumkin
+        if user.role != 'doctor':
+            return ChatRoom.objects.none()
+
+        # Doctor ishtirok etgan barcha chat roomlar
+        return ChatRoom.objects.filter(
+            room_type='1:1',
+            participants=user
+        ).prefetch_related('participants').order_by('-updated_at')
 
     # def list(self, request):
     #     """
