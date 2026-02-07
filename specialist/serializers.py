@@ -312,8 +312,7 @@ class ConsultationDetailSerializer(serializers.ModelSerializer):
         Priority:
         1. full_name field
         2. first_name + last_name
-        3. Telefon (formatted)
-        4. "Mijoz"
+        3. "Mijoz" (default) - telefon EMAS!
         """
         # 1. full_name field
         if hasattr(obj.client, 'full_name'):
@@ -332,17 +331,7 @@ class ConsultationDetailSerializer(serializers.ModelSerializer):
             if first_name:
                 return first_name
 
-        # 3. Telefon (formatted)
-        phone = str(obj.client.phone or '').strip()
-        if phone:
-            # 998949355757 → +998 94 935 57 57
-            if phone.startswith('998') and len(phone) == 12:
-                return f"+998 {phone[3:5]} {phone[5:8]} {phone[8:10]} {phone[10:]}"
-            elif len(phone) >= 9:
-                return f"+{phone}"
-            return phone
-
-        # 4. Default
+        # 3. Default - telefon EMAS!
         return "Mijoz"
 
     def get_client_avatar(self, obj):
