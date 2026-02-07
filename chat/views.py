@@ -25,10 +25,15 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
     serializer_class = ChatRoomSerializer
 
     def get_queryset(self):
+        """
+        ✅ OPTIMIZED: client_profile va doctor ham select_related
+        """
         return ChatRoom.objects.filter(
             participants=self.request.user
         ).prefetch_related(
-            'participants'
+            'participants',
+            'participants__client_profile',
+            'participants__doctor',
         ).annotate(
             last_message_time_annotated=Max('messages__created_at')
         ).order_by('-last_message_time_annotated').distinct()
@@ -60,8 +65,8 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
 
         messages = room.messages.select_related(
             'sender',
-            'sender__client_profile',  # Client uchun
-            'sender__doctor',  # Doctor uchun
+            'sender__client_profile',
+            'sender__doctor',
         ).prefetch_related(
             'attachments',
             'reply_to__sender',

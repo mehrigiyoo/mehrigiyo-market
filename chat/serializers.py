@@ -1,4 +1,4 @@
-# chat/serializers.py - FIXED ChatRoomSerializer
+# chat/serializers.py - FIXED with full_name support
 
 from rest_framework import serializers
 from .models import ChatRoom, Message, MessageAttachment
@@ -7,12 +7,63 @@ from django.utils import timezone
 
 
 class UserMiniSerializer(serializers.ModelSerializer):
-    """User minimal ma'lumoti"""
+    """
+    User minimal ma'lumoti
+
+    ✅ Keys saqlanadi: first_name, last_name
+    ✅ Value full_name dan olinadi
+    """
     avatar = serializers.SerializerMethodField()
+    first_name = serializers.SerializerMethodField()
+    last_name = serializers.SerializerMethodField()
 
     class Meta:
         model = UserModel
         fields = ['id', 'phone', 'first_name', 'last_name', 'avatar', 'role']
+
+    def _get_user_full_name(self, user):
+        """
+        User ning to'liq ismini olish
+
+        Priority:
+        - Client: client_profile.full_name
+        - Doctor: doctor.full_name
+        - Fallback: phone
+        """
+        # Client
+        if hasattr(user, 'client_profile'):
+            try:
+                full_name = (user.client_profile.full_name or '').strip()
+                if full_name:
+                    return full_name
+            except:
+                pass
+
+        # Doctor
+        if hasattr(user, 'doctor'):
+            try:
+                full_name = (user.doctor.full_name or '').strip()
+                if full_name:
+                    return full_name
+            except:
+                pass
+
+        # Fallback
+        return user.phone or ''
+
+    def get_first_name(self, obj):
+        """
+        ✅ Key: first_name (o'zgarmaydi)
+        ✅ Value: full_name (profile dan)
+        """
+        return self._get_user_full_name(obj)
+
+    def get_last_name(self, obj):
+        """
+        ✅ Key: last_name (o'zgarmaydi)
+        ✅ Value: bo'sh string
+        """
+        return ''
 
     def get_avatar(self, obj):
         if hasattr(obj, 'avatar') and obj.avatar:
@@ -158,6 +209,7 @@ class MessageCreateSerializer(serializers.ModelSerializer):
         }
         return sizes.get(file_type, 20 * 1024 * 1024)
 
+
 class ChatRoomSerializer(serializers.ModelSerializer):
     participants = UserMiniSerializer(many=True, read_only=True)
     last_message = serializers.SerializerMethodField()
@@ -176,7 +228,12 @@ class ChatRoomSerializer(serializers.ModelSerializer):
         FIXED: Prefetch ichida slice ishlatmaslik
         To'g'ridan-to'g'ri query
         """
-        last_msg = obj.messages.select_related('sender').prefetch_related('attachments').order_by('-created_at').first()
+        last_msg = obj.messages.select_related(
+            'sender',
+            'sender__client_profile',  # ✅ Client uchun
+            'sender__doctor',  # ✅ Doctor uchun
+        ).prefetch_related('attachments').order_by('-created_at').first()
+
         if last_msg:
             return MessageSerializer(last_msg, context=self.context).data
         return None
