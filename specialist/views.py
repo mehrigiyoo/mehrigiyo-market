@@ -57,7 +57,7 @@ class DoctorPagination(PageNumberPagination):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def get_doctors_by_type_paginated(request, type_id):
     """
     Type ID bo'yicha doctorlarni olish (paginated)
