@@ -50,8 +50,8 @@ class StoriesImage(models.Model):
 
 class Advertising(models.Model):
     image = models.ImageField(upload_to=f'medicine/advertising/', null=True, blank=True)
-    title = models.CharField(max_length=255)
-    text = models.TextField()
+    title = models.CharField(max_length=255, blank=True, null=True)
+    text = models.TextField(blank=True, null=True)
     medicine = models.ForeignKey(Medicine, on_delete=models.RESTRICT, null=True, blank=True,
                                  related_name='special_news_med')
     doctor = models.ForeignKey(Doctor, on_delete=models.RESTRICT, null=True, blank=True,

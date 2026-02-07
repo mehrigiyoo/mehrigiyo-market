@@ -37,8 +37,8 @@ class ClientAddress(models.Model):
     apartment = models.CharField(max_length=50, blank=True, null=True)
     add_phone = models.CharField(max_length=50, blank=True, null=True)
     comment = models.CharField(max_length=255, blank=True, null=True)
-    latitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
-    longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
+    latitude = models.DecimalField(max_digits=12, decimal_places=6, blank=True, null=True)
+    longitude = models.DecimalField(max_digits=12, decimal_places=6, blank=True, null=True)
 
     is_default = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
