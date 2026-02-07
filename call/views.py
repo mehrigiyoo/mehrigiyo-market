@@ -19,6 +19,37 @@ from .service import livekit_service
 logger = logging.getLogger(__name__)
 
 
+def get_user_full_name(user):
+    """
+    User ning to'liq ismini olish (helper function)
+
+    Priority:
+    - Client: client_profile.full_name
+    - Doctor: doctor.full_name
+    - Fallback: phone
+    """
+    # Client
+    if hasattr(user, 'client_profile'):
+        try:
+            full_name = (user.client_profile.full_name or '').strip()
+            if full_name:
+                return full_name
+        except:
+            pass
+
+    # Doctor
+    if hasattr(user, 'doctor'):
+        try:
+            full_name = (user.doctor.full_name or '').strip()
+            if full_name:
+                return full_name
+        except:
+            pass
+
+    # Fallback
+    return user.phone or ''
+
+
 class CallPagination(PageNumberPagination):
     """Custom pagination for calls"""
     page_size = 20
@@ -46,17 +77,24 @@ class CallViewSet(viewsets.ModelViewSet):
     pagination_class = CallPagination
 
     def get_queryset(self):
-        """Get calls for current user"""
+        """Get calls for current user with profile optimization"""
         return Call.objects.filter(
             Q(caller=self.request.user) | Q(receiver=self.request.user)
-        ).select_related('caller', 'receiver', 'room').prefetch_related('events')
+        ).select_related(
+            'caller',
+            'caller__client_profile',  # ✅ Client uchun
+            'caller__doctor',  # ✅ Doctor uchun
+            'receiver',
+            'receiver__client_profile',
+            'receiver__doctor',
+            'room'
+        ).prefetch_related('events')
 
     def get_serializer_class(self):
         """Dynamic serializer selection"""
         if self.action == 'list':
             return CallListSerializer
         return CallSerializer
-
 
     # INITIATE CALL
     @action(detail=False, methods=['post'])
@@ -101,7 +139,11 @@ class CallViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            #  BUSY CHECK - YANGI!
+            # ✅ Get full names
+            caller_full_name = get_user_full_name(caller)
+            receiver_full_name = get_user_full_name(receiver)
+
+            # 🔒 BUSY CHECK
             # Check if caller is busy
             caller_busy = Call.objects.filter(
                 Q(caller=caller) | Q(receiver=caller),
@@ -129,14 +171,12 @@ class CallViewSet(viewsets.ModelViewSet):
                     {
                         'error': 'User is busy',
                         'error_code': 'RECEIVER_BUSY',
-                        'message': f'{receiver.first_name or "Foydalanuvchi"} boshqa callda'
+                        'message': f'{receiver_full_name} boshqa callda'  # ✅ full_name
                     },
                     status=status.HTTP_409_CONFLICT
                 )
 
-            # ... rest of existing initiate code
-            # Generate room name, create call, etc.
-
+            # Generate LiveKit room
             livekit_room_name = f"call_{uuid.uuid4().hex[:16]}"
 
             lk_room = livekit_service.create_room(
@@ -174,14 +214,14 @@ class CallViewSet(viewsets.ModelViewSet):
             caller_token = livekit_service.generate_token(
                 room_name=livekit_room_name,
                 participant_identity=caller.id,
-                participant_name=f"{caller.first_name or caller.phone}",
+                participant_name=caller_full_name,  # ✅ full_name
                 metadata=f'{{"user_id": {caller.id}, "role": "{caller.role}"}}'
             )
 
             receiver_token = livekit_service.generate_token(
                 room_name=livekit_room_name,
                 participant_identity=receiver.id,
-                participant_name=f"{receiver.first_name or receiver.phone}",
+                participant_name=receiver_full_name,  # ✅ full_name
                 metadata=f'{{"user_id": {receiver.id}, "role": "{receiver.role}"}}'
             )
 
@@ -190,10 +230,10 @@ class CallViewSet(viewsets.ModelViewSet):
                 user=receiver,
                 type='call_incoming',
                 title=f"Incoming {call_type} call",
-                body=f"{caller.first_name or caller.phone} is calling you",
+                body=f"{caller_full_name} is calling you",  # ✅ full_name
                 call_id=call.id,
                 caller_id=caller.id,
-                caller_name=caller.first_name or caller.phone,
+                caller_name=caller_full_name,  # ✅ full_name
                 caller_phone=caller.phone,
                 caller_avatar=caller.avatar.url if caller.avatar else '',
                 call_type=call.call_type,
@@ -216,13 +256,13 @@ class CallViewSet(viewsets.ModelViewSet):
                 'caller': {
                     'id': caller.id,
                     'phone': caller.phone,
-                    'first_name': caller.first_name or '',
+                    'first_name': caller_full_name,  # ✅ Key o'zgarmadi, value full_name
                     'role': caller.role,
                 },
                 'receiver': {
                     'id': receiver.id,
                     'phone': receiver.phone,
-                    'first_name': receiver.first_name or '',
+                    'first_name': receiver_full_name,  # ✅ Key o'zgarmadi, value full_name
                     'role': receiver.role,
                 }
             }, status=status.HTTP_201_CREATED)
@@ -273,15 +313,18 @@ class CallViewSet(viewsets.ModelViewSet):
             # Update status
             call.mark_status('answered')
 
+            # ✅ Get full name
+            answerer_full_name = get_user_full_name(request.user)
+
             # FCM: CALL ANSWERED (to caller)
             send_fcm(
                 user=call.caller,
                 type='call_answered',
                 title="Call answered",
-                body=f"{request.user.first_name or request.user.phone} answered your call",
+                body=f"{answerer_full_name} answered your call",  # ✅ full_name
                 call_id=call.id,
                 answerer_id=request.user.id,
-                answerer_name=request.user.first_name or request.user.phone,
+                answerer_name=answerer_full_name,  # ✅ full_name
             )
 
             # Log event
@@ -291,11 +334,11 @@ class CallViewSet(viewsets.ModelViewSet):
                 user=request.user
             )
 
-            # Generate token for receiver (if not already done)
+            # Generate token for receiver
             receiver_token = livekit_service.generate_token(
                 room_name=call.livekit_room_name,
                 participant_identity=request.user.id,
-                participant_name=f"{request.user.first_name or request.user.phone}",
+                participant_name=answerer_full_name,  # ✅ full_name
                 metadata=f'{{"user_id": {request.user.id}, "role": "{request.user.role}"}}'
             )
 
@@ -349,12 +392,15 @@ class CallViewSet(viewsets.ModelViewSet):
             # Update status
             call.mark_status('rejected')
 
+            # ✅ Get full name
+            rejecter_full_name = get_user_full_name(request.user)
+
             # FCM: CALL REJECTED (to caller)
             send_fcm(
                 user=call.caller,
                 type='call_rejected',
                 title="Call rejected",
-                body=f"{request.user.first_name or request.user.phone} rejected your call",
+                body=f"{rejecter_full_name} rejected your call",  # ✅ full_name
                 call_id=call.id,
             )
 
@@ -382,7 +428,7 @@ class CallViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    # CALL CANCEL REQUEST USER
+    # CALL CANCEL
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
         """
@@ -406,7 +452,7 @@ class CallViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Status check: faqat answered bo'lmagan calllarni cancel qilish mumkin
+        # Status check
         if call.status not in ['initiated', 'ringing']:
             return Response(
                 {'error': f'Call allaqachon {call.status}. Cancel qilib bo\'lmaydi'},
@@ -417,12 +463,15 @@ class CallViewSet(viewsets.ModelViewSet):
             # Update status
             call.mark_status('cancelled')
 
+            # ✅ Get full name
+            caller_full_name = get_user_full_name(call.caller)
+
             # FCM: CALL CANCELLED (to receiver)
             send_fcm(
                 user=call.receiver,
                 type='call_cancelled',
                 title="Call cancelled",
-                body=f"{call.caller.first_name or call.caller.phone} cancelled the call",
+                body=f"{caller_full_name} cancelled the call",  # ✅ full_name
                 call_id=call.id,
             )
 
@@ -488,12 +537,15 @@ class CallViewSet(viewsets.ModelViewSet):
             # Get other user
             other_user = call.receiver if request.user == call.caller else call.caller
 
+            # ✅ Get full name
+            ender_full_name = get_user_full_name(request.user)
+
             # FCM: CALL ENDED (to other user)
             send_fcm(
                 user=other_user,
                 type='call_ended',
                 title="Call ended",
-                body=f"Call with {request.user.first_name or request.user.phone} ended",
+                body=f"Call with {ender_full_name} ended",  # ✅ full_name
                 call_id=call.id,
                 duration=call.duration,
             )
@@ -507,7 +559,6 @@ class CallViewSet(viewsets.ModelViewSet):
 
             # End LiveKit room
             livekit_service.delete_room(call.livekit_room_name)
-
 
             logger.info(f"Call ended: {call.id} by {request.user}, duration: {call.formatted_duration}")
 
@@ -549,4 +600,3 @@ class CallViewSet(viewsets.ModelViewSet):
 
         serializer = CallListSerializer(active_calls, many=True, context={'request': request})
         return Response(serializer.data)
-

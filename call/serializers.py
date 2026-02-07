@@ -5,12 +5,63 @@ from chat.models import ChatRoom
 
 
 class CallUserMiniSerializer(serializers.ModelSerializer):
-    """Minimal user info"""
+    """
+    Minimal user info for calls
+
+    ✅ Keys saqlanadi: first_name, last_name
+    ✅ Value full_name dan olinadi
+    """
     avatar = serializers.SerializerMethodField()
+    first_name = serializers.SerializerMethodField()
+    last_name = serializers.SerializerMethodField()
 
     class Meta:
         model = UserModel
         fields = ['id', 'phone', 'first_name', 'last_name', 'role', 'avatar']
+
+    def _get_user_full_name(self, user):
+        """
+        User ning to'liq ismini olish
+
+        Priority:
+        - Client: client_profile.full_name
+        - Doctor: doctor.full_name
+        - Fallback: phone
+        """
+        # Client
+        if hasattr(user, 'client_profile'):
+            try:
+                full_name = (user.client_profile.full_name or '').strip()
+                if full_name:
+                    return full_name
+            except:
+                pass
+
+        # Doctor
+        if hasattr(user, 'doctor'):
+            try:
+                full_name = (user.doctor.full_name or '').strip()
+                if full_name:
+                    return full_name
+            except:
+                pass
+
+        # Fallback
+        return user.phone or ''
+
+    def get_first_name(self, obj):
+        """
+        ✅ Key: first_name (o'zgarmaydi)
+        ✅ Value: full_name (profile dan)
+        """
+        return self._get_user_full_name(obj)
+
+    def get_last_name(self, obj):
+        """
+        ✅ Key: last_name (o'zgarmaydi)
+        ✅ Value: bo'sh string
+        """
+        return ''
 
     def get_avatar(self, obj):
         if hasattr(obj, 'avatar') and obj.avatar:
