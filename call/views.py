@@ -214,14 +214,14 @@ class CallViewSet(viewsets.ModelViewSet):
             caller_token = livekit_service.generate_token(
                 room_name=livekit_room_name,
                 participant_identity=caller.id,
-                participant_name=caller_full_name,  # ✅ full_name
+                participant_name=caller_full_name,
                 metadata=f'{{"user_id": {caller.id}, "role": "{caller.role}"}}'
             )
 
             receiver_token = livekit_service.generate_token(
                 room_name=livekit_room_name,
                 participant_identity=receiver.id,
-                participant_name=receiver_full_name,  # ✅ full_name
+                participant_name=receiver_full_name,
                 metadata=f'{{"user_id": {receiver.id}, "role": "{receiver.role}"}}'
             )
 
@@ -230,10 +230,10 @@ class CallViewSet(viewsets.ModelViewSet):
                 user=receiver,
                 type='call_incoming',
                 title=f"Incoming {call_type} call",
-                body=f"{caller_full_name} is calling you",  # ✅ full_name
+                body=f"{caller_full_name} is calling you",
                 call_id=call.id,
                 caller_id=caller.id,
-                caller_name=caller_full_name,  # ✅ full_name
+                caller_name=caller_full_name,
                 caller_phone=caller.phone,
                 caller_avatar=caller.avatar.url if caller.avatar else '',
                 call_type=call.call_type,
@@ -256,14 +256,16 @@ class CallViewSet(viewsets.ModelViewSet):
                 'caller': {
                     'id': caller.id,
                     'phone': caller.phone,
-                    'first_name': caller_full_name,  # ✅ Key o'zgarmadi, value full_name
+                    'first_name': caller_full_name,
                     'role': caller.role,
+                    'avatar': request.build_absolute_uri(caller.avatar.url) if caller.avatar else None,
                 },
                 'receiver': {
                     'id': receiver.id,
                     'phone': receiver.phone,
-                    'first_name': receiver_full_name,  # ✅ Key o'zgarmadi, value full_name
+                    'first_name': receiver_full_name,
                     'role': receiver.role,
+                    'avatar': request.build_absolute_uri(receiver.avatar.url) if receiver.avatar else None,
                 }
             }, status=status.HTTP_201_CREATED)
 
