@@ -19,6 +19,37 @@ from .services import livekit_stream_service
 logger = logging.getLogger(__name__)
 
 
+def get_user_full_name(user):
+    """
+    User ning to'liq ismini olish (helper function)
+
+    Priority:
+    - Client: client_profile.full_name
+    - Doctor: doctor.full_name
+    - Fallback: phone
+    """
+    # Client
+    if hasattr(user, 'client_profile'):
+        try:
+            full_name = (user.client_profile.full_name or '').strip()
+            if full_name:
+                return full_name
+        except:
+            pass
+
+    # Doctor
+    if hasattr(user, 'doctor'):
+        try:
+            full_name = (user.doctor.full_name or '').strip()
+            if full_name:
+                return full_name
+        except:
+            pass
+
+    # Fallback
+    return user.phone or ''
+
+
 class LiveStreamViewSet(viewsets.ModelViewSet):
     """
     LiveStream ViewSet - Performance Optimized
@@ -43,8 +74,16 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        """Optimized queryset with prefetch"""
-        return LiveStream.objects.select_related('host').filter(
+        """
+        Optimized queryset with prefetch
+
+        ✅ Profile optimization qo'shildi
+        """
+        return LiveStream.objects.select_related(
+            'host',
+            'host__client_profile',
+            'host__doctor',
+        ).filter(
             Q(host=self.request.user) | Q(status='live')
         )
 
@@ -100,20 +139,25 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
         if not serializer.validated_data.get('scheduled_at'):
             stream.start_stream()
 
+        # Get host full name
+        host_full_name = get_user_full_name(request.user)
+
         # Generate host token
         host_token = livekit_stream_service.generate_host_token(
             room_name=room_name,
             host_id=request.user.id,
-            host_name=request.user.first_name or request.user.phone
+            host_name=host_full_name
         )
 
-        response_data = LiveStreamSerializer(stream).data
+        # Response with context (avatar uchun)
+        response_data = LiveStreamSerializer(stream, context={'request': request}).data
         response_data['livekit_token'] = host_token
         response_data['livekit_ws_url'] = livekit_stream_service.ws_url
 
         logger.info(f"Stream created: {stream.id} by {request.user}")
 
         return Response(response_data, status=status.HTTP_201_CREATED)
+
 
     def update(self, request, *args, **kwargs):
         """Update stream (DOCTOR ONLY)"""
@@ -311,12 +355,13 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
         # Increment total views
         stream.total_views += 1
         stream.save(update_fields=['total_views'])
+        host_full_name = get_user_full_name(request.user)
 
         # Generate viewer token
         viewer_token = livekit_stream_service.generate_viewer_token(
             room_name=stream.livekit_room_name,
             viewer_id=request.user.id,
-            viewer_name=request.user.first_name or request.user.phone
+            viewer_name=host_full_name
         )
 
         logger.info(f"User {request.user} joined stream {stream.id}")
@@ -413,7 +458,7 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
         serializer = LiveStreamListSerializer(streams, many=True)
         return Response(serializer.data)
 
-    # ✅ HELPER METHOD
+    # HELPER METHOD
     def _is_doctor(self, user):
         """
         Check if user is a doctor
