@@ -355,14 +355,21 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
         # Increment total views
         stream.total_views += 1
         stream.save(update_fields=['total_views'])
-        host_full_name = get_user_full_name(request.user)
+
+        #  Get user full name
+        user_full_name = get_user_full_name(request.user)
 
         # Generate viewer token
         viewer_token = livekit_stream_service.generate_viewer_token(
             room_name=stream.livekit_room_name,
             viewer_id=request.user.id,
-            viewer_name=host_full_name
+            viewer_name=user_full_name
         )
+
+        #  Prepare user info for response
+        user_avatar = None
+        if hasattr(request.user, 'avatar') and request.user.avatar:
+            user_avatar = request.build_absolute_uri(request.user.avatar.url)
 
         logger.info(f"User {request.user} joined stream {stream.id}")
 
@@ -373,8 +380,15 @@ class LiveStreamViewSet(viewsets.ModelViewSet):
             'chat_enabled': stream.chat_enabled,
             'reactions_enabled': stream.reactions_enabled,
             'viewer_count': stream.get_active_viewers(),
+            #  User info
+            'user': {
+                'id': request.user.id,
+                'phone': request.user.phone,
+                'first_name': user_full_name,
+                'role': request.user.role,
+                'avatar': user_avatar,
+            }
         })
-
     @action(detail=True, methods=['post'])
     def leave(self, request, pk=None):
         """
