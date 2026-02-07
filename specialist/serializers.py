@@ -260,7 +260,6 @@ class GenderStatisticsSerializer(serializers.Serializer):
 
 
 from rest_framework import serializers
-from .models import ConsultationRequest
 from specialist.models import Doctor
 
 
@@ -354,7 +353,6 @@ class ConsultationDetailSerializer(serializers.ModelSerializer):
             request = self.context.get('request')
             if request:
                 return request.build_absolute_uri(avatar_url)
-
 
     def get_date(self, obj):
         if obj.availability_slot:
