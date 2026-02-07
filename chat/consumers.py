@@ -128,15 +128,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _send_fcm(self, user, message):
         """Send FCM notification"""
+        # ✅ Get sender display name
+        sender_name = self._get_user_full_name(self.user)
+
         send_fcm(
             user=user,
             type='new_message',
-            title=f"{self.user.first_name or self.user.phone}",
+            title=sender_name,
             body=message.text[:100] if message.text else 'Sent a file',
             room_id=self.room_id,
             message_id=message.id,
             sender_id=self.user.id,
-            sender_name=self.user.first_name or self.user.phone,
+            sender_name=sender_name,
             sender_avatar=self.user.avatar.url if self.user.avatar else '',
         )
 
@@ -298,6 +301,36 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         return f'{protocol}://{host}'
 
+    def _get_user_full_name(self, user):
+        """
+        User ning to'liq ismini olish
+
+        Priority:
+        - Client: client_profile.full_name
+        - Doctor: doctor.full_name
+        - Fallback: phone
+        """
+        # Client
+        if hasattr(user, 'client_profile'):
+            try:
+                full_name = (user.client_profile.full_name or '').strip()
+                if full_name:
+                    return full_name
+            except:
+                pass
+
+        # Doctor
+        if hasattr(user, 'doctor'):
+            try:
+                full_name = (user.doctor.full_name or '').strip()
+                if full_name:
+                    return full_name
+            except:
+                pass
+
+        # Fallback
+        return user.phone or 'User'
+
     def _message_to_dict(self, message):
         """
         Message obyektini dict ga aylantirish
@@ -305,15 +338,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
         """
         base_url = self._get_base_url()
 
+        # ✅ Sender full_name olish
+        sender_full_name = self._get_user_full_name(message.sender)
+
         data = {
             'id': message.id,
-            'item_type': 'message',  # ← Item type qo'shamiz
+            'item_type': 'message',
             'room': message.room.id,
             'sender': {
                 'id': message.sender.id,
                 'phone': message.sender.phone,
-                'first_name': message.sender.first_name or '',
-                'last_name': message.sender.last_name or '',
+                'full_name': sender_full_name,  # ✅ full_name
                 'role': message.sender.role,
             },
             'message_type': message.message_type,
@@ -322,7 +357,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'read_at': message.read_at.isoformat() if message.read_at else None,
             'created_at': message.created_at.isoformat(),
             'updated_at': message.updated_at.isoformat(),
-            'timestamp': message.created_at.timestamp(),  # ← Sorting uchun
+            'timestamp': message.created_at.timestamp(),
             'is_mine': message.sender.id == self.user.id,
             'attachments': [],
             'reply_to': None
@@ -351,12 +386,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         # Reply to
         if message.reply_to:
+            # ✅ Reply sender full_name
+            reply_sender_full_name = self._get_user_full_name(message.reply_to.sender)
+
             data['reply_to'] = {
                 'id': message.reply_to.id,
                 'sender': {
                     'id': message.reply_to.sender.id,
                     'phone': message.reply_to.sender.phone,
-                    'first_name': message.reply_to.sender.first_name or '',
+                    'full_name': reply_sender_full_name,  # ✅ full_name
                 },
                 'text': message.reply_to.text[:100] if message.reply_to.text else '',
                 'message_type': message.reply_to.message_type,
@@ -367,33 +405,35 @@ class ChatConsumer(AsyncWebsocketConsumer):
     def get_user_display_info(self, user):
         """
         User uchun display ma'lumotlar:
-        ClientProfile yoki DoctorProfile dan oladi
+        ClientProfile yoki Doctor modelidan full_name oladi
         """
-        first_name = ''
-        last_name = ''
         full_name = ''
         gender = None
 
+        # ✅ Client
         if hasattr(user, 'client_profile'):
-            full_name = user.client_profile.full_name or ''
-            gender = user.client_profile.gender
+            try:
+                full_name = (user.client_profile.full_name or '').strip()
+                gender = user.client_profile.gender
+            except:
+                pass
 
-        elif hasattr(user, 'doctor_profile'):
-            full_name = user.doctor_profile.full_name or ''
-            gender = user.doctor_profile.gender
+        # ✅ Doctor
+        elif hasattr(user, 'doctor'):
+            try:
+                full_name = (user.doctor.full_name or '').strip()
+                gender = user.doctor.gender
+            except:
+                pass
 
-        # Agar full_name bor bo‘lsa, bo‘lib yuboramiz
-        if full_name:
-            parts = full_name.split(' ', 1)
-            first_name = parts[0]
-            last_name = parts[1] if len(parts) > 1 else ''
+        # Fallback
+        if not full_name:
+            full_name = user.phone or 'User'
 
         return {
             'id': user.id,
             'phone': user.phone,
-            'first_name': first_name,
-            'last_name': last_name,
-            'full_name': full_name,
+            'full_name': full_name,  # ✅ To'liq ism
             'gender': gender,
         }
 
@@ -426,23 +466,33 @@ class ChatConsumer(AsyncWebsocketConsumer):
         """
         Messages va Calls ni birga olib, vaqt bo'yicha sort qilish
         """
-        from call.models import Call  # Call modelingiz
+        from call.models import Call
 
         # Messages olish
         messages = list(Message.objects.filter(
             room_id=self.room_id
         ).select_related(
-            'sender', 'reply_to__sender'
+            'sender',
+            'sender__client_profile',  # ✅ ClientProfile
+            'sender__doctor',  # ✅ Doctor
+            'reply_to__sender',
+            'reply_to__sender__client_profile',
+            'reply_to__sender__doctor'
         ).prefetch_related(
             'attachments'
         ).order_by('-created_at')[:limit])
 
-        # Calls olish (faqat finished calls)
+        # Calls olish
         calls = list(Call.objects.filter(
             room_id=self.room_id,
             status__in=['ended', 'missed', 'rejected']
         ).select_related(
-            'caller', 'receiver'
+            'caller',
+            'caller__client_profile',  # ✅ ClientProfile
+            'caller__doctor',  # ✅ Doctor
+            'receiver',
+            'receiver__client_profile',
+            'receiver__doctor'
         ).order_by('-created_at')[:limit])
 
         # Convert to dict
@@ -452,20 +502,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
         # Combine
         all_items = message_dicts + call_dicts
 
-        # Sort by timestamp (yangidan eskiga)
+        # Sort by timestamp
         all_items.sort(key=lambda x: x['timestamp'], reverse=True)
 
         # Limit
         all_items = all_items[:limit]
 
-        # Reverse (eskidan yangiga - chat uchun)
+        # Reverse
         all_items = list(reversed(all_items))
 
         return all_items
 
     @database_sync_to_async
     def has_more_history(self):
-        """Qo'shimcha history bormi (messages + calls)"""
+        """Qo'shimcha history bormi"""
         from call.models import Call
 
         message_count = Message.objects.filter(room_id=self.room_id).count()
@@ -479,14 +529,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def get_history_before(self, before_timestamp, limit=50):
-        """
-        before_timestamp dan oldingi history
-        (messages + calls combined)
-        """
+        """before_timestamp dan oldingi history"""
         from call.models import Call
         from datetime import datetime
 
-        # Timestamp to datetime
         before_dt = datetime.fromtimestamp(float(before_timestamp))
 
         # Messages
@@ -494,7 +540,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             room_id=self.room_id,
             created_at__lt=before_dt
         ).select_related(
-            'sender', 'reply_to__sender'
+            'sender',
+            'sender__client_profile',
+            'sender__doctor',
+            'reply_to__sender',
+            'reply_to__sender__client_profile',
+            'reply_to__sender__doctor'
         ).prefetch_related(
             'attachments'
         ).order_by('-created_at')[:limit])
@@ -505,7 +556,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             status__in=['ended', 'missed', 'rejected'],
             created_at__lt=before_dt
         ).select_related(
-            'caller', 'receiver'
+            'caller',
+            'caller__client_profile',
+            'caller__doctor',
+            'receiver',
+            'receiver__client_profile',
+            'receiver__doctor'
         ).order_by('-created_at')[:limit])
 
         # Convert
@@ -555,7 +611,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             pass
         return False
 
-    # CALL EVENT HANDLERS (avvalgidek)
+    # CALL EVENT HANDLERS
     async def call_incoming(self, event):
         """Incoming call notification"""
         await self.send(text_data=json.dumps({
