@@ -354,23 +354,94 @@ class DoctorConsultationViewSet(viewsets.ReadOnlyModelViewSet):
 
         GET /api/doctor/consultations/new/
 
-        VARIANT 1: Faqat bugun
-        VARIANT 2: Bugun va kelajakdagi
+        Query Parameters:
+        - date: Specific date (YYYY-MM-DD) - Aniq sana
+        - start_date: From date (YYYY-MM-DD) - Boshlanish sanasi
+        - end_date: To date (YYYY-MM-DD) - Tugash sanasi
+        - filter: 'today' | 'future' | 'all' - Tezkor filter
+
+        Examples:
+        - /new/ - Bugun va kelajak (default)
+        - /new/?filter=today - Faqat bugun
+        - /new/?filter=future - Faqat kelajak
+        - /new/?filter=all - Hammasi (o'tmish ham)
+        - /new/?date=2026-02-10 - Aniq sana
+        - /new/?start_date=2026-02-07&end_date=2026-02-14 - Oraliq
         """
-        from datetime import date
+        from datetime import date, datetime
 
         today = date.today()
 
-        # Bugun va kelajakdagi konsultatsiyalar
-        consultations = self.get_queryset().filter(
-            status='paid',
-            requested_date__gte=today
-        )
+        # Base queryset
+        consultations = self.get_queryset().filter(status='paid')
+
+        # Get filter parameters
+        filter_type = request.query_params.get('filter')
+        specific_date = request.query_params.get('date')
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+
+        # Apply filters
+        if specific_date:
+            # Aniq sana
+            try:
+                target_date = datetime.strptime(specific_date, '%Y-%m-%d').date()
+                consultations = consultations.filter(requested_date=target_date)
+            except ValueError:
+                return Response(
+                    {'error': 'Invalid date format. Use YYYY-MM-DD'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        elif start_date or end_date:
+            # Sana oralig'i
+            try:
+                if start_date:
+                    start = datetime.strptime(start_date, '%Y-%m-%d').date()
+                    consultations = consultations.filter(requested_date__gte=start)
+
+                if end_date:
+                    end = datetime.strptime(end_date, '%Y-%m-%d').date()
+                    consultations = consultations.filter(requested_date__lte=end)
+            except ValueError:
+                return Response(
+                    {'error': 'Invalid date format. Use YYYY-MM-DD'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        elif filter_type:
+            # Tezkor filterlar
+            if filter_type == 'today':
+                consultations = consultations.filter(requested_date=today)
+            elif filter_type == 'future':
+                consultations = consultations.filter(requested_date__gt=today)
+            elif filter_type == 'all':
+                # Hammasi - hech qanday sana filteri yo'q
+                pass
+            else:
+                return Response(
+                    {'error': 'Invalid filter type. Use: today, future, all'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        else:
+            # Default: bugun va kelajak
+            consultations = consultations.filter(requested_date__gte=today)
+
+        # Order by date and time
+        consultations = consultations.order_by('requested_date', 'requested_time')
 
         serializer = self.get_serializer(consultations, many=True)
         return Response({
             'count': consultations.count(),
-            'results': serializer.data
+            'results': serializer.data,
+            'filter_applied': {
+                'filter': filter_type,
+                'date': specific_date,
+                'start_date': start_date,
+                'end_date': end_date,
+                'default': 'today and future' if not any([filter_type, specific_date, start_date, end_date]) else None
+            }
         })
 
 
